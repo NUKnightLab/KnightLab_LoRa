@@ -14,5 +14,6 @@ extern RH_RF95 *LoRaRadio;
 extern RHRouter *LoRaRouter;
 
 extern void setupLoRa(uint8_t node_id, uint8_t rf95_cs, uint8_t rf95_int);
+uint8_t sendLoRaMessage(uint8_t *msg, uint8_t len, uint8_t to_id);
 
 #endif

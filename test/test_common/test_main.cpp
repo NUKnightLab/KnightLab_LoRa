@@ -52,6 +52,17 @@ void test_long_echo(void) {
     LoRaRadio->sleep();
 }
 
+void test_sendLoRaMessage(void) {
+    uint8_t msg[] = "TEST SEND";
+    LoRaRouter->clearRoutingTable();
+    TEST_ASSERT_EQUAL(
+        RH_ROUTER_ERROR_NONE,
+        sendLoRaMessage(msg, sizeof(msg), TEST_SERVER_ID));
+    TEST_ASSERT_EQUAL( 
+        RHRouter::Valid,
+        LoRaRouter->getRouteTo(TEST_SERVER_ID)->state);
+}
+
 void setup() {
     while (!Serial);
     setupLoRa(node_id, 8, 3);
@@ -67,6 +78,7 @@ void setup() {
     RUN_TEST(test_echo);
     RUN_TEST(test_echo);
     RUN_TEST(test_long_echo);
+    RUN_TEST(test_sendLoRaMessage);
     UNITY_END(); // stop unit testing
 }
 
