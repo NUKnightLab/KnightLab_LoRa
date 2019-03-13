@@ -15,7 +15,11 @@
 extern RH_RF95 *LoRaRadio;
 extern RHRouter *LoRaRouter;
 
-extern void setupLoRa(uint8_t node_id, uint8_t rf95_cs, uint8_t rf95_int, uint8_t tx_power=10);
-uint8_t sendLoRaMessage(uint8_t *msg, uint8_t len, uint8_t to_id, uint8_t flags=0x00);
+static uint8_t LoRaReceiveBuffer[KL_LORA_MAX_MESSAGE_LEN];
+
+void setupLoRa(uint8_t node_id, uint8_t rf95_cs, uint8_t rf95_int, uint8_t tx_power=10);
+uint8_t sendLoRaMessage(uint8_t *msg, uint8_t len, uint8_t to_id, uint8_t flags=0x00, bool sleep=true);
+bool receiveLoRaMessage(uint16_t timeout=0, bool sleep=true);
+void setStaticRoute(uint8_t dest, uint8_t next_hop);
 
 #endif

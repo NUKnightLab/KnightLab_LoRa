@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <unity.h>
 #include <KnightLab_LoRa.h>
 #include "test.h"
@@ -11,7 +12,6 @@
 #define TX_POWER 5
 
 uint8_t node_id = 3;
-uint8_t LoRaReceiveBuffer[KL_LORA_MAX_MESSAGE_LEN];
 uint8_t long_msg[] = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
 
 namespace Test_KnightLab_LoRa {
@@ -40,6 +40,13 @@ namespace Test_KnightLab_LoRa {
             LoRaRouter->getRouteTo(TEST_SERVER_ID)->state);
     }
 
+    void test_setStaticRoute(void) {
+        setStaticRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        TEST_ASSERT_EQUAL(
+            TEST_SERVER_ID,
+            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)->next_hop);
+    }
+
     void test_long_echo(void) {
         TEST_ASSERT_EQUAL(RH_RF95_MAX_MESSAGE_LEN, sizeof(long_msg));
         TEST_ASSERT_EQUAL(
@@ -47,6 +54,7 @@ namespace Test_KnightLab_LoRa {
             LoRaRouter->sendtoWait(long_msg, KL_LORA_MAX_MESSAGE_LEN, TEST_SERVER_ID));
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
+        //uint8_t len = sizeof(LoRaReceiveBuffer);
         uint8_t from;
         TEST_ASSERT_TRUE(
             LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
@@ -70,7 +78,7 @@ namespace Test_KnightLab_LoRa {
     void test_long_hopped_send_receive(void) {
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            sendLoRaMessage(long_msg, KL_LORA_MAX_MESSAGE_LEN, HOPPED_TEST_SERVER_ID)
+            sendLoRaMessage(long_msg, sizeof(long_msg), HOPPED_TEST_SERVER_ID)
         );
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
@@ -115,13 +123,14 @@ namespace Test_KnightLab_LoRa {
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             LoRaRouter->sendtoWait(msg, sizeof(msg), TEST_SERVER_ID));
-        uint8_t len = sizeof(LoRaReceiveBuffer);
+        uint8_t buf[KL_LORA_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
         uint8_t from;
         TEST_ASSERT_TRUE(
-            LoRaRouter->recvfromAckTimeout(LoRaReceiveBuffer, &len, 3000, &from));
+            LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
         TEST_ASSERT_EQUAL(TEST_SERVER_ID, from);
         TEST_ASSERT_EQUAL(sizeof(msg), len);
-        TEST_ASSERT_EQUAL_STRING_LEN(msg, LoRaReceiveBuffer, len);
+        TEST_ASSERT_EQUAL_STRING_LEN(msg, buf, len);
         LoRaRadio->sleep();
     }
 
@@ -148,7 +157,8 @@ namespace Test_KnightLab_LoRa {
          */
 
         RUN_TEST(KnightLab_LoRa__test_test);
-        RUN_TEST(test_echo); RUN_TEST(test_echo); /* see NOTE above */
+        RUN_TEST(test_setStaticRoute);
+        RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
         //RUN_TEST(test_long_echo);
         //RUN_TEST(test_sendLoRaMessage);
         //RUN_TEST(test_many_routes);
