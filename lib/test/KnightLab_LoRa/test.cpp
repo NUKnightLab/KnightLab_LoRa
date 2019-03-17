@@ -12,7 +12,7 @@
 #define TX_POWER 5
 
 uint8_t node_id = 3;
-uint8_t long_msg[] = "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789";
+uint8_t long_msg[] = "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
 
 namespace Test_KnightLab_LoRa {
 
@@ -31,27 +31,23 @@ namespace Test_KnightLab_LoRa {
 
     void test_router_setup(void) {
         setupLoRa(node_id, RF95_CS, RF95_INT, TX_POWER);
-        TEST_ASSERT_EQUAL(
-            RHRouter::Invalid,
-            LoRaRouter->getRouteTo(TEST_SERVER_ID)->state);
-        LoRaRouter->addRouteTo(TEST_SERVER_ID, TEST_SERVER_ID);
-        TEST_ASSERT_EQUAL(
-            RHRouter::Valid,
-            LoRaRouter->getRouteTo(TEST_SERVER_ID)->state);
-    }
-
-    void test_setStaticRoute(void) {
-        setStaticRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        initializeLoRaRoutes();
         TEST_ASSERT_EQUAL(
             TEST_SERVER_ID,
-            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)->next_hop);
+            LoRaRouter->getRouteTo(TEST_SERVER_ID));
+        LoRaRouter->addRouteTo(TEST_SERVER_ID, TEST_SERVER_ID);
+        TEST_ASSERT_EQUAL(
+            TEST_SERVER_ID,
+            LoRaRouter->getRouteTo(TEST_SERVER_ID));
     }
 
     void test_long_echo(void) {
-        TEST_ASSERT_EQUAL(RH_RF95_MAX_MESSAGE_LEN, sizeof(long_msg));
+        TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, sizeof(long_msg));
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            LoRaRouter->sendtoWait(long_msg, KL_LORA_MAX_MESSAGE_LEN, TEST_SERVER_ID));
+            //LoRaRouter->sendtoWait(long_msg, KL_LORA_MAX_MESSAGE_LEN, TEST_SERVER_ID));
+            //LoRaRouter->sendtoWait(long_msg, RH_ROUTER_MAX_MESSAGE_LEN, TEST_SERVER_ID));
+            LoRaRouter->sendtoWait(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, TEST_SERVER_ID));
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
         //uint8_t len = sizeof(LoRaReceiveBuffer);
@@ -59,38 +55,49 @@ namespace Test_KnightLab_LoRa {
         TEST_ASSERT_TRUE(
             LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
         TEST_ASSERT_EQUAL(TEST_SERVER_ID, from);
-        TEST_ASSERT_EQUAL(KL_LORA_MAX_MESSAGE_LEN, len);
+        //TEST_ASSERT_EQUAL(KL_LORA_MAX_MESSAGE_LEN, len);
+        TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, len);
         TEST_ASSERT_EQUAL_STRING_LEN(long_msg, buf, len);
-        LoRaRadio->sleep();
     }
 
     void test_sendLoRaMessage(void) {
         uint8_t msg[] = "TEST SEND";
-        LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             sendLoRaMessage(msg, sizeof(msg), TEST_SERVER_ID, KL_FLAGS_NOECHO));
-        TEST_ASSERT_EQUAL( 
-            RHRouter::Valid,
-            LoRaRouter->getRouteTo(TEST_SERVER_ID)->state);
+        TEST_ASSERT_TRUE(LoRaRouter->getRouteTo(TEST_SERVER_ID));
     }
 
     void test_long_hopped_send_receive(void) {
         TEST_ASSERT_EQUAL(
+            HOPPED_TEST_SERVER_ID,
+            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID));
+        LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        TEST_ASSERT_EQUAL(
+            TEST_SERVER_ID,
+            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)
+        );
+        TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            sendLoRaMessage(long_msg, sizeof(long_msg), HOPPED_TEST_SERVER_ID)
+            //sendLoRaMessage(long_msg, KL_LORA_MAX_MESSAGE_LEN, HOPPED_TEST_SERVER_ID)
+            sendLoRaMessage(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, HOPPED_TEST_SERVER_ID)
         );
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
-        uint8_t from;
+        uint8_t source;
+        uint8_t dest;
         TEST_ASSERT_TRUE(
-            LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
-        TEST_ASSERT_EQUAL(HOPPED_TEST_SERVER_ID, from);
-        TEST_ASSERT_EQUAL(KL_LORA_MAX_MESSAGE_LEN, len);
+            LoRaRouter->recvfromAckTimeout(buf, &len, 7000, &source, &dest));
+        TEST_ASSERT_EQUAL(HOPPED_TEST_SERVER_ID, source);
+        TEST_ASSERT_EQUAL(node_id, dest);
+        //TEST_ASSERT_EQUAL(KL_LORA_MAX_MESSAGE_LEN, len);
+        TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, len);
         TEST_ASSERT_EQUAL_STRING_LEN(long_msg, buf, len);
     }
 
     /**
+     * OBSOLETE. This test no longer needed with custom KLRouter.
+     * 
      * RadioHead only allows for 10 routes, but we are dynamically setting the next hop routes
      * in the sendLoRaMessage function, thus we expect successful delivery even after route
      * saturation.
@@ -99,6 +106,7 @@ namespace Test_KnightLab_LoRa {
      * we need to add enough routes to be sure the test server route is cleared. 2x the table size
      * should do it.
      */
+    /*
     void test_many_routes(void) {
         //LoRaRouter->printRoutingTable();
         for (uint8_t id=0; id<RH_ROUTING_TABLE_SIZE*2; id++) {
@@ -111,27 +119,59 @@ namespace Test_KnightLab_LoRa {
         uint8_t msg[] = "TEST MANY ROUTES";
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            sendLoRaMessage(msg, sizeof(msg), TEST_SERVER_ID));
+            sendLoRaMessage(msg, sizeof(msg), TEST_SERVER_ID, false));
     }
+    */
 
     void test_echo(void) {
+        static uint8_t last_seq = 255;
         uint8_t msg[] = "TEST ECHO";
         // RH_ROUTER_ERROR_NONE 0
+        // RH_ROUTER_ERROR_INVALID_LENGTH    1
         // RH_ROUTER_ERROR_NO_ROUTE 2
         // RH_ROUTER_ERROR_NO_REPLY 4
         // RH_ROUTER_ERROR_UNABLE_TO_DELIVER 5
+        //uint8_t buf[KL_LORA_MAX_MESSAGE_LEN];
+        uint8_t buf[KL_ROUTER_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+        uint8_t from;
+        TEST_ASSERT_EQUAL(
+            TEST_SERVER_ID,
+            LoRaRouter->getRouteTo(TEST_SERVER_ID)
+        );
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             LoRaRouter->sendtoWait(msg, sizeof(msg), TEST_SERVER_ID));
-        uint8_t buf[KL_LORA_MAX_MESSAGE_LEN];
-        uint8_t len = sizeof(buf);
-        uint8_t from;
+        Serial.println("TEST SUCCESSFUL sendtoWait");
+        Serial.println("TEST SENDING recvfromAckTimeout");
         TEST_ASSERT_TRUE(
             LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
+        TEST_ASSERT(last_seq != LoRaRouter->getSequenceNumber());
+        last_seq = LoRaRouter->getSequenceNumber();
         TEST_ASSERT_EQUAL(TEST_SERVER_ID, from);
         TEST_ASSERT_EQUAL(sizeof(msg), len);
         TEST_ASSERT_EQUAL_STRING_LEN(msg, buf, len);
-        LoRaRadio->sleep();
+    }
+
+    /*
+    void test_getLastFrom(void) {
+        uint8_t msg[] = "TEST getLastFrom";
+        uint8_t buf[KL_LORA_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+        uint8_t from;
+        LoRaRouter->sendtoWait(msg, sizeof(msg), TEST_SERVER_ID);
+        LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from);
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->getLastFrom());
+        LoRaRouter->sendtoWait(msg, sizeof(msg), HOPPED_TEST_SERVER_ID);
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->getLastFrom());
+        LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from);
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->getLastFrom());
+    }
+    */
+
+    void test_doArp(void) {
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(TEST_SERVER_ID));
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(HOPPED_TEST_SERVER_ID));
     }
 
     /* test runners */
@@ -143,6 +183,7 @@ namespace Test_KnightLab_LoRa {
 
         /* Communication tests. Always run the setup test. Subsequent tests depend on it. */
         RUN_TEST(test_router_setup);
+
 
         /**
          * NOTE: Always be sure to have more than one message sending test, otherwise the server
@@ -157,14 +198,17 @@ namespace Test_KnightLab_LoRa {
          */
 
         RUN_TEST(KnightLab_LoRa__test_test);
-        RUN_TEST(test_setStaticRoute);
         RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
-        //RUN_TEST(test_long_echo);
+        //RUN_TEST(test_doArp);
+
+        RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
+        RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
+        RUN_TEST(test_long_echo);
         //RUN_TEST(test_sendLoRaMessage);
-        //RUN_TEST(test_many_routes);
+        //RUN_TEST(test_getLastFrom);
         #ifdef RH_TEST_NETWORK 
         #if RH_TEST_NETWORK == 1
-        RUN_TEST(test_long_hopped_send_receive);
+        //RUN_TEST(test_long_hopped_send_receive);
         #endif
         #endif
     }
