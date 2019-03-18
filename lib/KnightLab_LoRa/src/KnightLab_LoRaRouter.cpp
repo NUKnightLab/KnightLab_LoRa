@@ -12,6 +12,7 @@ KnightLab_LoRaRouter::RoutedMessage KnightLab_LoRaRouter::_arpMessage;
 KnightLab_LoRaRouter::KnightLab_LoRaRouter(RHGenericDriver& driver, uint8_t thisAddress)
     : RHDatagram(driver, thisAddress)
 {
+    //_max_hops = RH_DEFAULT_MAX_HOPS;
     _retransmissions = 0;
     _lastSequenceNumber = 0;
     _timeout = RH_DEFAULT_TIMEOUT;
@@ -20,6 +21,8 @@ KnightLab_LoRaRouter::KnightLab_LoRaRouter(RHGenericDriver& driver, uint8_t this
     // 0 indicates no messages received from that node. Thus _lastSequenceNumber increment is
     // modified not to use 0
     memset(_seenIds, 0, sizeof(_seenIds));
+	_max_hops = RH_DEFAULT_MAX_HOPS;
+    clearRoutingTable();
 }
 
 ////////////////////////////////////////////////////////////////////
@@ -213,7 +216,8 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             if (_to == _thisAddress) {
                 //acknowledge(_id, _from, &_thisAddress, 1);
                 acknowledge(_id, _from);
-            } else if (_seenIds[_from] > 0) {
+            } else if (_to == RH_BROADCAST_ADDRESS && getRouteTo(buf[0])> 0) {
+                acknowledge(_id, _from);
                 //acknowledge(_id, _from, &(_seenIds[_from]), 1);
                 // we need to flatten this structure in order for an arp ack to access routing info
                 //acknowledgeArp(_id, _from);
@@ -289,7 +293,6 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
 #endif
 )
 	{
-		Serial.println("No simulated network condition found");
 	    // OK
 	}
 	else
@@ -409,6 +412,25 @@ uint8_t KnightLab_LoRaRouter::getSequenceNumber() {
  * will be utilized. Nodes should not respond unless they have a valid route.
  */
 uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
+    /* c-v from acknowledge
+    setHeaderId(id);
+    setHeaderFlags(RH_FLAGS_ACK);
+    // We would prefer to send a zero length ACK,
+    // but if an RH_RF22 receives a 0 length message with a CRC error, it will never receive
+    // a 0 length message again, until its reset, which makes everything hang :-(
+    // So we send an ACK of 1 octet
+    // REVISIT: should we send the RSSI for the information of the sender?
+    uint8_t ack = '!';
+    sendto(&ack, sizeof(ack), from);
+    waitPacketSent();
+    */
+
+    if (!routeHelper(&dest, 1, dest, true)) {
+        routeHelper(&dest, 1, 255, true);
+    };
+    return getRouteTo(dest);
+
+/*
     _arpMessage.header.source = _thisAddress;
     _arpMessage.header.dest = dest;
     _arpMessage.header.hops = 0;
@@ -420,7 +442,6 @@ uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
 	Serial.print(dest);
 	Serial.print(" to address: ");
 	Serial.println(dest);
-	/** if this is a direct message, we only need the ack **/
     if (sendtoWait((uint8_t*)(&_arpMessage), len, dest)) {
 		return dest;
 	} else { // we need to discover a route
@@ -431,6 +452,7 @@ uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
 	}
 	// no route
 	return 0;
+*/
 }
 
 
@@ -455,6 +477,8 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
 {
     Serial.println("KnightLab_LoRaRouter::recvfrom");
     bool ret = RHDatagram::recvfrom(buf, len, from, to, id, flags);
+    Serial.print("Received flags: ");
+    Serial.println(*flags);
     Serial.print("ret from RHDatagram::recvfrom: ");
     Serial.println(ret);
     Serial.print("_last_received_from_id: ");
@@ -472,7 +496,7 @@ uint8_t KnightLab_LoRaRouter::getLastFrom()
 /**
  * typically handled in a reliable datagram subclass.
  */
-bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address)
+bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp)
 {
     // Assemble the message
     uint8_t thisSequenceNumber = ++_lastSequenceNumber;
@@ -484,11 +508,15 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     while (retries++ <= _retries)
     {
     setHeaderId(thisSequenceNumber);
-    setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK); // Clear the ACK flag
+    if (arp) {
+        setHeaderFlags(KL_FLAGS_ARP, RH_FLAGS_ACK); // Clear the ACK flag
+    } else {
+        setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK); // Clear the ACK flag
+    }
     sendto(buf, len, address);
     waitPacketSent();
-    // Never wait for ACKS to broadcasts:
-    if (address == RH_BROADCAST_ADDRESS)
+    // don't wait for ACKS to broadcasts unless it's an arp
+    if (!arp && address == RH_BROADCAST_ADDRESS)
         return true;
     if (retries > 1)
         _retransmissions++;
@@ -516,6 +544,14 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
                && (id == thisSequenceNumber))
             {
             // Its the ACK we are waiting for
+            // if it's an ack to an arp, we should record the route
+            if (arp) {
+                Serial.print("Adding route to ");
+                Serial.print(buf[0]);
+                Serial.print(" via ");
+                Serial.println(from);
+                addRouteTo(buf[0], from);
+            }
             return true;
             }
             else if (   !(flags & RH_FLAGS_ACK)
@@ -540,34 +576,22 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
 ////////////////////////////////////////////////////////////////////
 uint8_t KnightLab_LoRaRouter::route(RoutedMessage* message, uint8_t messageLen)
 {
-	bool discover_routes = false; // waiting for arpable reliable datagram
+	bool discover_routes = true; // waiting for arpable reliable datagram
     // Reliably deliver it if possible. See if we have a route:
     uint8_t next_hop = RH_BROADCAST_ADDRESS;
     if (message->header.dest != RH_BROADCAST_ADDRESS) {
-		//RoutingTableEntry* route = getRouteTo(message->header.dest);
 		uint8_t route = getRouteTo(message->header.dest);
 		if (!route) {
 			Serial.print("No route to dest: ");
 			Serial.println(message->header.dest);
 			if (discover_routes) {
-				/**
-				 * We try to discover the route, preferring a direct route to the destination if
-				 * its signal is strong enough. Otherwise, the first responder to a broadcast arp
-				 * request.
-				 */
-				Serial.print("Initiating arp discovery to ");
-				Serial.println(message->header.dest);
-				route = doArp(message->header.dest);
-				if (route) {
-					addRouteTo(message->header.dest, route);
-				} else {
-	    			return RH_ROUTER_ERROR_NO_ROUTE;
-				}
-			} else {
+                Serial.println("Attempting to discover route");
+                route = doArp(message->header.dest);
+            }
+            if (!route) {
 	    		return RH_ROUTER_ERROR_NO_ROUTE;
-			}
+            }
 		}
-		//next_hop = route->next_hop;
 		next_hop = route;
     }
     //if (!RHReliableDatagram::sendtoWait((uint8_t*)message, messageLen, next_hop))

@@ -6,6 +6,8 @@
 
 #include <RHDatagram.h>
 
+#define RH_TEST_NETWORK 1
+
 // The acknowledgement bit in the FLAGS
 // The top 4 bits of the flags are reserved for RadioHead. The lower 4 bits are reserved
 // for application layer use.
@@ -55,7 +57,7 @@ public:
     void setTimeout(uint16_t timeout);
     void setRetries(uint8_t retries);
     uint8_t retries();
-    bool routeHelper(uint8_t* buf, uint8_t len, uint8_t address);
+    bool routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp=false);
     uint8_t sendtoWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t flags=0);
     uint8_t sendtoFromSourceWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t source, uint8_t flags);
     bool recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t* from = NULL, uint8_t* to = NULL, uint8_t* id = NULL, uint8_t* flags = NULL);

@@ -38,7 +38,7 @@ void setup() {
 }
 
 void loop() {
-    static uint8_t buf[240];
+    static uint8_t buf[255];
     static int counter = 0;
     if (++counter % 10000 == 0)
         Serial.print(".");

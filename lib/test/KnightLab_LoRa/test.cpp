@@ -29,16 +29,18 @@ namespace Test_KnightLab_LoRa {
         TEST_ASSERT_EQUAL(85, RH_VERSION_MINOR);
     }
 
-    void test_router_setup(void) {
-        setupLoRa(node_id, RF95_CS, RF95_INT, TX_POWER);
+
+    void test_initializeLoRaRoutes(void) {
+        LoRaRouter->clearRoutingTable();
         initializeLoRaRoutes();
         TEST_ASSERT_EQUAL(
             TEST_SERVER_ID,
             LoRaRouter->getRouteTo(TEST_SERVER_ID));
-        LoRaRouter->addRouteTo(TEST_SERVER_ID, TEST_SERVER_ID);
-        TEST_ASSERT_EQUAL(
-            TEST_SERVER_ID,
-            LoRaRouter->getRouteTo(TEST_SERVER_ID));
+    }
+
+    void test_router_setup(void) {
+        setupLoRa(node_id, RF95_CS, RF95_INT, TX_POWER);
+        TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(TEST_SERVER_ID));
     }
 
     void test_long_echo(void) {
@@ -135,13 +137,12 @@ namespace Test_KnightLab_LoRa {
         uint8_t buf[KL_ROUTER_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
         uint8_t from;
-        TEST_ASSERT_EQUAL(
-            TEST_SERVER_ID,
-            LoRaRouter->getRouteTo(TEST_SERVER_ID)
-        );
+        LoRaRouter->clearRoutingTable();
+        TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(TEST_SERVER_ID));
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             LoRaRouter->sendtoWait(msg, sizeof(msg), TEST_SERVER_ID));
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->getRouteTo(TEST_SERVER_ID));
         Serial.println("TEST SUCCESSFUL sendtoWait");
         Serial.println("TEST SENDING recvfromAckTimeout");
         TEST_ASSERT_TRUE(
@@ -199,11 +200,11 @@ namespace Test_KnightLab_LoRa {
 
         RUN_TEST(KnightLab_LoRa__test_test);
         RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
-        //RUN_TEST(test_doArp);
-
-        RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
-        RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
-        RUN_TEST(test_long_echo);
+        RUN_TEST(test_doArp);
+        return;
+        //RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
+        //RUN_TEST(test_echo); RUN_TEST(test_echo);
+        //RUN_TEST(test_long_echo);
         //RUN_TEST(test_sendLoRaMessage);
         //RUN_TEST(test_getLastFrom);
         #ifdef RH_TEST_NETWORK 
