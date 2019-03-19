@@ -23,16 +23,16 @@ void setup() {
     Serial.print("Executing with RadioHead version: ");
     Serial.print(RH_VERSION_MAJOR);
     Serial.print(".");
-    setupLoRa(TEST_SERVER_ID, RF95_CS, RF95_INT, TX_POWER);
-    initializeLoRaRoutes(); // sets all routes to single-hop
+    //initializeLoRaRoutes(); // sets all routes to single-hop
     Serial.print(RH_VERSION_MINOR);
     Serial.print("; Server ID: ");
     Serial.println(TEST_SERVER_ID);
+    setupLoRa(TEST_SERVER_ID, RF95_CS, RF95_INT, TX_POWER);
     #ifdef RH_TEST_NETWORK 
     #if RH_TEST_NETWORK == 1
-    if (TEST_SERVER_ID == 1) {
-        LoRaRouter->addRouteTo(3, 2);
-    }
+    //if (TEST_SERVER_ID == 1) {
+    //    LoRaRouter->addRouteTo(3, 2);
+    //}
     #endif
     #endif
 }

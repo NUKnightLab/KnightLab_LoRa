@@ -70,10 +70,10 @@ public:
     void addRouteTo(uint8_t dest, uint8_t next_hop);
     uint8_t getRouteTo(uint8_t dest);
     uint8_t doArp(uint8_t dest);
-    uint8_t getLastFrom();
+    //uint8_t getLastFrom();
     uint8_t getSequenceNumber();
     void clearRoutingTable();
-    void initializeAllRoutes();
+    //void initializeAllRoutes();
 
 protected:
     void acknowledge(uint8_t id, uint8_t from);
@@ -88,7 +88,7 @@ private:
     uint16_t _timeout;
     uint8_t _retries;
     uint8_t _seenIds[256];
-    uint8_t _last_received_from_id;
+    //uint8_t _last_received_from_id;
 
     uint8_t _static_routes[255];
 

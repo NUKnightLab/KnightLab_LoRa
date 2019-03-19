@@ -73,9 +73,9 @@ void setupLoRa(uint8_t node_id, uint8_t rf95_cs, uint8_t rf95_int, uint8_t tx_po
     LoRaRadio->sleep();
 }
 
-void initializeLoRaRoutes() {
-    LoRaRouter->initializeAllRoutes();
-}
+//void initializeLoRaRoutes() {
+//    LoRaRouter->initializeAllRoutes();
+//}
 
 /**
  * It is recommended that you call these functions rather than direct calls from the RadioHead
