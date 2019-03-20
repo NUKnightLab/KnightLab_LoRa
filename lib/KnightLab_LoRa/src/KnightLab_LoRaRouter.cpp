@@ -103,12 +103,13 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
     if (available() && recvfrom(buf, len, &_from, &_to, &_id, &_flags)) {
         // ACK
         if (_flags & RH_FLAGS_ACK) {
-            if (_to == RH_BROADCAST_ADDRESS) { // A broadcast ACK is an "I am here" message
-                if (!getRouteTo(_from)) {
-                    addRouteTo(_from, _from);
-                    // TODO: track the rssi value in case we find a better route later
-                }
-            } 
+            // route was added when signal received
+            //if (_to == RH_BROADCAST_ADDRESS) { // A broadcast ACK is an "I am here" message
+            //    if (!getRouteTo(_from)) {
+            //        addRouteTo(_from, _from, _driver.lastRssi());
+            //        // TODO: track the rssi value in case we find a better route later
+            //    }
+            //} 
             return false;
         } // Never ACK an ACK
         // ARP
@@ -297,6 +298,7 @@ void KnightLab_LoRaRouter::clearRoutingTable()
 {
 	for (uint8_t i=0; i<sizeof(_static_routes); i++) {
 		_static_routes[i] = 0;
+        _route_signal_strength[i] = 0;
 	}
 }
 
@@ -322,27 +324,51 @@ uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
     return getRouteTo(dest);
 }
 
-void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop)
+void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rssi)
 {
     Serial.print("Adding route TO: ");
     Serial.print(dest);
     Serial.print(" VIA: ");
     Serial.println(next_hop);
 	_static_routes[dest] = next_hop;
+    setRouteSignalStrength(dest, rssi);
     Serial.println("ROUTING TABLE: ");
     for (uint8_t i=1; i<255; i++) {
         if (_static_routes[i]) {
             Serial.print(i);
             Serial.print(" -> ");
-            Serial.println(_static_routes[i]);
+            Serial.print(_static_routes[i]);
+            Serial.print(" (");
+            Serial.print(getRouteSignalStrength(dest));
+            Serial.println("dB)");
         }
     }
+}
+
+void KnightLab_LoRaRouter::setRouteSignalStrength(uint8_t dest, int16_t rssi) {
+    // RSSI values will always be <= 0. We compress the values by storing the absolute
+    // value to normalize rssi to positive 8-bits. Better strength will now be the lower value
+    if (rssi >= 0){
+        _route_signal_strength[dest] = 0;
+    } else if (rssi <= -255) {
+        _route_signal_strength[dest] = 255;
+    } else {
+        _route_signal_strength[dest] = (uint8_t)(-rssi);
+    }
+}
+
+int16_t KnightLab_LoRaRouter::getRouteSignalStrength(uint8_t dest) {
+    return -((int16_t)_route_signal_strength[dest]);
 }
 
 bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, uint8_t* to, uint8_t* id, uint8_t* flags)
 {
     Serial.println("KnightLab_LoRaRouter::recvfrom");
+    Serial.print("Starting with flags: ");
+    Serial.println(*flags);
     bool ret = RHDatagram::recvfrom(buf, len, from, to, id, flags);
+    Serial.print("Flags after RHDatagram::recvfrom: ");
+    Serial.println(*flags);
 
     #if RH_TEST_NETWORK==1
 	    // This network looks like 1-2-3-4
@@ -356,12 +382,6 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
         }
     #endif
 
-    /*
-    if (!getRouteTo(*from)) {
-        addRouteTo(*from, *from);
-    }
-    */
-
     Serial.print("Received message ID: ");
     Serial.print(*id);
     Serial.print("; FROM: ");
@@ -372,6 +392,19 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     Serial.print(*to);
     Serial.print("; FLAGS: ");
     Serial.println(*flags, HEX);
+
+    // Check every signal that comes in against the routing table to always be adding new
+    // single-hop routes as we see them. We prefer single-hop over multi-hop if the RSSI > -80
+    // or otherwise is stronger than the multi-hop route.
+    uint8_t existing_route = getRouteTo(*from);
+    int16_t last_rssi = _driver.lastRssi();
+    if (!existing_route
+        || (existing_route != *from && (
+                    last_rssi > -80
+                    || last_rssi > getRouteSignalStrength(*from)) )) {
+            addRouteTo(*from, *from, last_rssi);
+    }
+
     return ret;
 }
 
@@ -392,9 +425,11 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     do {
     setHeaderId(thisSequenceNumber);
     if (arp) {
+        Serial.println("Setting ARP header flag, clearing ACK");
         setHeaderFlags(KL_FLAGS_ARP, RH_FLAGS_ACK); // Set the ARP flag, clear the ACK flag
     } else {
-        setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK); // Clear the ACK flag
+        Serial.println("Clearing ACK and ARP header flags");
+        setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK|KL_FLAGS_ARP); // Clear the ACK & ARP flags
     }
     Serial.print("Sending message LEN: ");
     Serial.print(len);
@@ -435,12 +470,13 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
                 // Its the ACK we are waiting for
                 // if it's an ack to an arp, we should record the route
                 if (arp) {
-                    addRouteTo(buf[0], from);
+                    addRouteTo(buf[0], from, _driver.lastRssi());
                 }
                 return true;
             } else if ( arp && to == RH_BROADCAST_ADDRESS) {
                 // this is an "I am here" broadcast response to our arp request
-                addRouteTo(from, from);
+                // route was added when signal received
+                //addRouteTo(from, from, _driver.lastRssi());
                 return true;
             } else if (   !(flags & RH_FLAGS_ACK)
                 && (id == _seenIds[from])) {

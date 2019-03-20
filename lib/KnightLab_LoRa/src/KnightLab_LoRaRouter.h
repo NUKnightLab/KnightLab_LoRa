@@ -67,7 +67,9 @@ public:
     void resetRetransmissions(); 
     bool recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from=NULL, uint8_t* to=NULL, uint8_t* id=NULL, uint8_t* flags=NULL);
     uint8_t route(RoutedMessage* message, uint8_t messageLen);
-    void addRouteTo(uint8_t dest, uint8_t next_hop);
+    void addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rssi=-32768);
+    void setRouteSignalStrength(uint8_t dest, int16_t rssi);
+    int16_t getRouteSignalStrength(uint8_t dest);
     uint8_t getRouteTo(uint8_t dest);
     uint8_t doArp(uint8_t dest);
     //uint8_t getLastFrom();
@@ -91,6 +93,7 @@ private:
     //uint8_t _last_received_from_id;
 
     uint8_t _static_routes[255];
+    uint8_t _route_signal_strength[255];
 
     static RoutedMessage _tmpMessage;
     static RoutedMessage _arpMessage; // we don't want to overwrite the _tmpMessage with an arp

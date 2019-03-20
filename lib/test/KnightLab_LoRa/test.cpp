@@ -177,15 +177,15 @@ namespace Test_KnightLab_LoRa {
         // we currently have no valid route. You wouldn't normally do this unless somehow you
         // know that the route actually exists.
 
-        //uint8_t msg[] = "FORCE ARP";
-        //LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
-        //TEST_ASSERT_EQUAL(
-        //    RH_ROUTER_ERROR_NONE,
-        //    sendLoRaMessage(msg, sizeof(msg), HOPPED_TEST_SERVER_ID, KL_FLAGS_NOECHO));
-        //LoRaRouter->clearRoutingTable();
-        //LoRaRouter->setRetries(0);
-        //TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(HOPPED_TEST_SERVER_ID));
-        //TEST_ASSERT_EQUAL(4, LoRaRouter->doArp(4));
+        uint8_t msg[] = "FORCE ARP";
+        LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        TEST_ASSERT_EQUAL(
+            RH_ROUTER_ERROR_NONE,
+            sendLoRaMessage(msg, sizeof(msg), HOPPED_TEST_SERVER_ID, KL_FLAGS_NOECHO));
+        LoRaRouter->clearRoutingTable();
+        LoRaRouter->setRetries(0);
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(HOPPED_TEST_SERVER_ID));
+        TEST_ASSERT_EQUAL(4, LoRaRouter->doArp(4));
     }
 
     /* test runners */
