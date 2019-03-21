@@ -13,6 +13,7 @@
 // for application layer use.
 #define RH_FLAGS_ACK 0x80
 #define KL_FLAGS_ARP 0x08
+#define KL_FLAGS_TEST_CONTROL 0x40
 #define RH_DEFAULT_TIMEOUT 200
 #define RH_DEFAULT_RETRIES 3
 
@@ -25,6 +26,9 @@
 #define RH_ROUTER_ERROR_TIMEOUT           3
 #define RH_ROUTER_ERROR_NO_REPLY          4
 #define RH_ROUTER_ERROR_UNABLE_TO_DELIVER 5
+
+#define KL_ACK_CODE_NONE 0
+#define KL_ACK_CODE_ERROR_NO_ROUTE 2
 
 #define RH_ROUTER_MAX_MESSAGE_LEN (RH_MAX_MESSAGE_LEN - sizeof(KnightLab_LoRaRouter::RoutedMessageHeader))
 // 255 - sizeof(RoutedMessageHeader)
@@ -57,7 +61,7 @@ public:
     void setTimeout(uint16_t timeout);
     void setRetries(uint8_t retries);
     uint8_t retries();
-    bool routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp=false);
+    bool routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp=false, bool test=false);
     uint8_t sendtoWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t flags=0);
     uint8_t sendtoFromSourceWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t source, uint8_t flags);
     bool recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t* from = NULL, uint8_t* to = NULL, uint8_t* id = NULL, uint8_t* flags = NULL);
@@ -75,11 +79,11 @@ public:
     //uint8_t getLastFrom();
     uint8_t getSequenceNumber();
     void clearRoutingTable();
+    void broadcastClearRoutingTable();
     //void initializeAllRoutes();
 
 protected:
-    void acknowledge(uint8_t id, uint8_t from);
-    void acknowledgeArp(uint8_t id, uint8_t from);
+    void acknowledge(uint8_t id, uint8_t from, uint8_t ack_code=KL_ACK_CODE_NONE);
     bool haveNewMessage();
     uint8_t _lastE2ESequenceNumber;
 

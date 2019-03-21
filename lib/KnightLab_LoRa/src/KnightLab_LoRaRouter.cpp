@@ -99,8 +99,11 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
     uint8_t _to;
     uint8_t _id;
     uint8_t _flags;
+
+
     // Get the message before its clobbered by the ACK (shared rx and tx buffer in some drivers
     if (available() && recvfrom(buf, len, &_from, &_to, &_id, &_flags)) {
+
         // ACK
         if (_flags & RH_FLAGS_ACK) {
             // route was added when signal received
@@ -110,8 +113,13 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             //        // TODO: track the rssi value in case we find a better route later
             //    }
             //} 
+            Serial.print("Received ACK with data: ");
+            Serial.println(buf[5]);
             return false;
         } // Never ACK an ACK
+        //// ACKs are not routed. Everything else should be routed, thus here we assume that the
+        //// buffer is a routed message and the first byte is the destination.
+        uint8_t dest = buf[0];
         // ARP
         if (_flags & KL_FLAGS_ARP) {
             setHeaderFlags(RH_FLAGS_NONE, KL_FLAGS_ARP); // Clear the ARP flag before acking
@@ -119,7 +127,10 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
                 //acknowledge(_id, _from, &_thisAddress, 1);
                 //acknowledge(_id, _from);
                 acknowledge(_id, RH_BROADCAST_ADDRESS); // let everybody know I'm here, not just the requestor
-            } else if (_to == RH_BROADCAST_ADDRESS && getRouteTo(buf[0])> 0) {
+            } else if (_to == RH_BROADCAST_ADDRESS && getRouteTo(dest)> 0) {
+                // TODO: should this depend on the quality of the route?
+                Serial.print("I have that route: ");
+                Serial.println(dest);
                 acknowledge(_id, _from);
                 //acknowledge(_id, _from, &(_seenIds[_from]), 1);
                 // we need to flatten this structure in order for an arp ack to access routing info
@@ -127,7 +138,17 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             }
             return false; // done processing ARP
         } else if (_to ==_thisAddress) {
-            acknowledge(_id, _from);
+            Serial.print("RECEIVED ACKABLE REQUEST _to: ");
+            Serial.print(_to);
+            Serial.print("; dest: ");
+            Serial.print(dest);
+            Serial.print("; getRouteTo(dest): ");
+            Serial.println(getRouteTo(dest));
+            if (_to == dest || getRouteTo(dest)) {
+                acknowledge(_id, _from);
+            } else {
+                acknowledge(_id, _from, KL_ACK_CODE_ERROR_NO_ROUTE);
+            }
         }
         // If we have not seen this message before, then we are interested in it
         if (_id != _seenIds[_from]) {
@@ -276,7 +297,7 @@ void KnightLab_LoRaRouter::resetRetransmissions()
     _retransmissions = 0;
 }
 
-void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from)
+void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from, uint8_t ack_code)
 {
     setHeaderId(id);
     setHeaderFlags(RH_FLAGS_ACK);
@@ -285,21 +306,51 @@ void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from)
     // a 0 length message again, until its reset, which makes everything hang :-(
     // So we send an ACK of 1 octet
     // REVISIT: should we send the RSSI for the information of the sender?
-    uint8_t ack = '!';
+    uint8_t ack = ack_code;
     Serial.print("Sending ACK ID: ");
+    Serial.print(id);
+    Serial.print("; TO: ");
+    Serial.print(from);
+    Serial.print("; CODE: ");
+    Serial.println(ack_code);
+    sendto(&ack, sizeof(ack), from);
+    waitPacketSent();
+}
+
+/*
+void KnightLab_LoRaRouter::ackError(uint8_t id, uint8_t from, uint8_t error_code)
+{
+    setHeaderId(id);
+    setHeaderFlags(RH_FLAGS_ACK);
+    // We would prefer to send a zero length ACK,
+    // but if an RH_RF22 receives a 0 length message with a CRC error, it will never receive
+    // a 0 length message again, until its reset, which makes everything hang :-(
+    // So we send an ACK of 1 octet
+    // REVISIT: should we send the RSSI for the information of the sender?
+    uint8_t ack = error_code;
+    Serial.print("Sending ACK ERROR ID: ");
     Serial.print(id);
     Serial.print("; TO: ");
     Serial.println(from);
     sendto(&ack, sizeof(ack), from);
     waitPacketSent();
 }
+*/
 
 void KnightLab_LoRaRouter::clearRoutingTable()
 {
+    Serial.println("Clearing routing table");
 	for (uint8_t i=0; i<sizeof(_static_routes); i++) {
 		_static_routes[i] = 0;
-        _route_signal_strength[i] = 0;
+        _route_signal_strength[i] = 255;
 	}
+}
+
+void KnightLab_LoRaRouter::broadcastClearRoutingTable()
+{
+    uint8_t buf[] = { 1 };
+    uint8_t len = sizeof(buf);
+    routeHelper(buf, len, RH_BROADCAST_ADDRESS, false, true);
 }
 
 //void KnightLab_LoRaRouter::initializeAllRoutes()
@@ -370,6 +421,17 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     Serial.print("Flags after RHDatagram::recvfrom: ");
     Serial.println(*flags);
 
+    // check for test controls before conforming to test network topology
+    if (*to == RH_BROADCAST_ADDRESS && (*flags & KL_FLAGS_TEST_CONTROL)) {
+        Serial.print("Received test control with data: ");
+        Serial.println(buf[0]);
+        if (buf[0] == 1) {
+            Serial.println("CALLING clearRoutingTable");
+            clearRoutingTable();
+        }
+        return false;
+    }
+
     #if RH_TEST_NETWORK==1
 	    // This network looks like 1-2-3-4
         uint8_t _from = *from;
@@ -412,7 +474,7 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
 /**
  * typically handled in a reliable datagram subclass.
  */
-bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp)
+bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp, bool test)
 {
     // Assemble the message
     uint8_t thisSequenceNumber = ++_lastSequenceNumber;
@@ -426,10 +488,13 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     setHeaderId(thisSequenceNumber);
     if (arp) {
         Serial.println("Setting ARP header flag, clearing ACK");
-        setHeaderFlags(KL_FLAGS_ARP, RH_FLAGS_ACK); // Set the ARP flag, clear the ACK flag
+        setHeaderFlags(KL_FLAGS_ARP, RH_FLAGS_ACK|KL_FLAGS_TEST_CONTROL);
+    } else if (test) {
+        Serial.println("Sending test control flag");
+        setHeaderFlags(KL_FLAGS_TEST_CONTROL, RH_FLAGS_ACK|KL_FLAGS_ARP);
     } else {
         Serial.println("Clearing ACK and ARP header flags");
-        setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK|KL_FLAGS_ARP); // Clear the ACK & ARP flags
+        setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK|KL_FLAGS_ARP|KL_FLAGS_TEST_CONTROL);
     }
     Serial.print("Sending message LEN: ");
     Serial.print(len);
@@ -460,16 +525,28 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         if (waitAvailableTimeout(timeLeft))
         {
         uint8_t from, to, id, flags;
-        if (recvfrom(0, 0, &from, &to, &id, &flags)) // Discards the message
+        uint8_t ackbuf[KL_ROUTER_MAX_MESSAGE_LEN];
+        uint8_t acklen = sizeof(ackbuf);
+        //if (recvfrom(0, 0, &from, &to, &id, &flags)) // Discards the message
+        if (recvfrom(ackbuf, &acklen, &from, &to, &id, &flags)) // Discards the message
         {
             // Now have a message: is it our ACK?
             if (   (from == address || address == RH_BROADCAST_ADDRESS)
                     && to == _thisAddress
                     && (flags & RH_FLAGS_ACK)
                     && (id == thisSequenceNumber)) {
+                uint8_t ack_code = ackbuf[0];
+                Serial.print("Received ACK id: ");
+                Serial.print(id);
+                Serial.print(" with code: ");
+                Serial.println(ack_code);
+                if (ack_code == KL_ACK_CODE_ERROR_NO_ROUTE) {
+                    return false;
+                }
                 // Its the ACK we are waiting for
                 // if it's an ack to an arp, we should record the route
                 if (arp) {
+                    Serial.println("Received ACK for ARP");
                     addRouteTo(buf[0], from, _driver.lastRssi());
                 }
                 return true;
