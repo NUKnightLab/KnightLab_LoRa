@@ -61,8 +61,10 @@ public:
     void setTimeout(uint16_t timeout);
     void setRetries(uint8_t retries);
     uint8_t retries();
-    bool routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp=false, bool test=false);
-    uint8_t sendtoWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t flags=0);
+    bool routeHelper(uint8_t* buf, uint8_t len, uint8_t address, uint8_t flags);
+    bool routeArp(uint8_t* buf, uint8_t len, uint8_t address);
+    bool routeTestControl(uint8_t* buf, uint8_t len, uint8_t address);
+    uint8_t sendtoWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t flags=0x00);
     uint8_t sendtoFromSourceWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t source, uint8_t flags);
     bool recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t* from = NULL, uint8_t* to = NULL, uint8_t* id = NULL, uint8_t* flags = NULL);
     bool recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* from = NULL, uint8_t* to = NULL, uint8_t* id = NULL, uint8_t* flags = NULL);

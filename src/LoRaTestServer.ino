@@ -9,7 +9,7 @@
  * For network testing, deploy 2 servers with IDs 1 and 2 and define RH_TEST_NETWORK as 1.
  * Test with a client of ID 3 which should have direct access to 2 and hopped access to 1.
  */
-#define TEST_SERVER_ID 4
+#define TEST_SERVER_ID 2
 // #define RH_TEST_NETWORK 1
 #define RF95_CS 8
 #define RF95_INT 3

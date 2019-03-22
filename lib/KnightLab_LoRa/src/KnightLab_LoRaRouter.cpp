@@ -87,8 +87,16 @@ uint8_t KnightLab_LoRaRouter::sendtoFromSourceWait(uint8_t* buf, uint8_t len, ui
     _tmpMessage.header.dest = dest;
     _tmpMessage.header.hops = 0;
     _tmpMessage.header.id = _lastE2ESequenceNumber++;
-    _tmpMessage.header.flags = flags;
+    _tmpMessage.header.flags = flags; // application layer flags
     memcpy(_tmpMessage.data, buf, len);
+    Serial.print("Constructed _tmpMessage. SOURCE: ");
+    Serial.print(_tmpMessage.header.source);
+    Serial.print("; DEST: ");
+    Serial.print(_tmpMessage.header.dest);
+    Serial.print("; ID: ");
+    Serial.print(_tmpMessage.header.id);
+    Serial.print("; APPLICATION FLAGS: ");
+    Serial.println(_tmpMessage.header.flags, HEX);
     return route(&_tmpMessage, sizeof(RoutedMessageHeader)+len);
 }
 
@@ -114,7 +122,6 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
         uint8_t dest = buf[0];
         // ARP
         if (_flags & KL_FLAGS_ARP) {
-            setHeaderFlags(RH_FLAGS_NONE, KL_FLAGS_ARP); // Clear the ARP flag before acking
             if (_to == _thisAddress) {
                 acknowledge(_id, RH_BROADCAST_ADDRESS); // let everybody know I'm here, not just the requestor
             } else if (_to == RH_BROADCAST_ADDRESS && getRouteTo(dest)> 0) {
@@ -122,7 +129,6 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             }
             return false; // done processing ARP
         } else if (_to ==_thisAddress) {
-            setHeaderFlags(RH_FLAGS_NONE, KL_FLAGS_ARP); // Clear the ARP flag before acking
             if (_to == dest || getRouteTo(dest)) {
                 acknowledge(_id, _from);
             } else {
@@ -175,6 +181,7 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
         return true; // Its for you!
     }
     else if (   _tmpMessage.header.dest != RH_BROADCAST_ADDRESS
+         && _to == _thisAddress // don't reroute something that was not intentionally routed to us
          && getRouteTo(_tmpMessage.header.dest) != _from // a precaution against bouncing but is this needed?
          && _tmpMessage.header.hops++ < _max_hops)
          //&& getRouteTo(_tmpMessage.header.dest)) // don't forward if we don't already have a route
@@ -215,19 +222,21 @@ void KnightLab_LoRaRouter::resetRetransmissions()
 void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from, uint8_t ack_code)
 {
     setHeaderId(id);
-    setHeaderFlags(RH_FLAGS_ACK);
+    setHeaderFlags(RH_FLAGS_ACK, 0xFF);
     // We would prefer to send a zero length ACK,
     // but if an RH_RF22 receives a 0 length message with a CRC error, it will never receive
     // a 0 length message again, until its reset, which makes everything hang :-(
     // So we send an ACK of 1 octet
     // REVISIT: should we send the RSSI for the information of the sender?
     uint8_t ack = ack_code;
-    Serial.print("Sending ACK ID: ");
+    Serial.print("acknowledge Sending ACK ID: ");
     Serial.print(id);
     Serial.print("; TO: ");
     Serial.print(from);
     Serial.print("; CODE: ");
-    Serial.println(ack_code);
+    Serial.print(ack_code);
+    Serial.print("; FLAGS: ");
+    Serial.println(RH_FLAGS_ACK, HEX);
     sendto(&ack, sizeof(ack), from);
     waitPacketSent();
 }
@@ -265,7 +274,7 @@ void KnightLab_LoRaRouter::broadcastClearRoutingTable()
 {
     uint8_t buf[] = { 1 };
     uint8_t len = sizeof(buf);
-    routeHelper(buf, len, RH_BROADCAST_ADDRESS, false, true);
+    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
 }
 
 //void KnightLab_LoRaRouter::initializeAllRoutes()
@@ -284,8 +293,8 @@ uint8_t KnightLab_LoRaRouter::getSequenceNumber() {
  * will be utilized. Nodes should not respond unless they have a valid route.
  */
 uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
-    if (!routeHelper(&dest, 1, dest, true)) {
-        routeHelper(&dest, 1, 255, true);
+    if (!routeArp(&dest, 1, dest)) {
+        routeArp(&dest, 1, 255);
     };
     return getRouteTo(dest);
 }
@@ -400,6 +409,8 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
         return false;
     }
     if (!passesTopologyTest(*from)) {
+        Serial.print("REJECTING out-of-range message for testing from NODE: ");
+        Serial.println(*from);
         return false;
     }
     Serial.print("Received message ID: "); Serial.print(*id);
@@ -424,12 +435,21 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     return ret;
 }
 
-/// c-v from RHReliableDatagram
-/**
- * typically handled in a reliable datagram subclass.
- */
-bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp, bool test)
+bool KnightLab_LoRaRouter::routeArp(uint8_t* buf, uint8_t len, uint8_t address)
 {
+    return routeHelper(buf, len, address, KL_FLAGS_ARP);
+}
+
+bool KnightLab_LoRaRouter::routeTestControl(uint8_t* buf, uint8_t len, uint8_t address)
+{
+    return routeHelper(buf, len, address, KL_FLAGS_TEST_CONTROL);
+}
+
+//bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp, bool test)
+bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, uint8_t flags)
+{
+    Serial.print("routeHelper received flags: ");
+    Serial.println(flags, HEX);
     // Assemble the message
     uint8_t thisSequenceNumber = ++_lastSequenceNumber;
     // Don't use 0 so we can tell if we've received any messages from a given node
@@ -440,6 +460,7 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     //while (retries++ <= _retries)
     do {
     setHeaderId(thisSequenceNumber);
+    /*
     if (arp) {
         Serial.println("Setting ARP header flag, clearing ACK");
         setHeaderFlags(KL_FLAGS_ARP, RH_FLAGS_ACK|KL_FLAGS_TEST_CONTROL);
@@ -450,12 +471,19 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         Serial.println("Clearing ACK and ARP header flags");
         setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK|KL_FLAGS_ARP|KL_FLAGS_TEST_CONTROL);
     }
-    Serial.print("Sending message LEN: ");
+    */
+    bool arp = (bool)(flags & KL_FLAGS_ARP);
+    Serial.print("Setting header flags to: ");
+    Serial.println(flags, HEX);
+    setHeaderFlags(flags, 0xFF);
+    Serial.print("RouteHelper Sending message LEN: ");
     Serial.print(len);
     Serial.print("; TO: ");
     Serial.print(address);
     Serial.print("; ID: ");
     Serial.print(thisSequenceNumber);
+    Serial.print("; FLAGS: ");
+    Serial.print(flags, HEX);
     Serial.print("; ARP: ");
     Serial.println(arp);
     sendto(buf, len, address);
@@ -480,20 +508,20 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     {
         if (waitAvailableTimeout(timeLeft))
         {
-        uint8_t from, to, id, flags;
+        uint8_t _from, _to, _id, _flags;
         uint8_t ackbuf[KL_ROUTER_MAX_MESSAGE_LEN];
         uint8_t acklen = sizeof(ackbuf);
         //if (recvfrom(0, 0, &from, &to, &id, &flags)) // Discards the message
-        if (recvfrom(ackbuf, &acklen, &from, &to, &id, &flags)) // Discards the message
+        if (recvfrom(ackbuf, &acklen, &_from, &_to, &_id, &_flags)) // Discards the message
         {
             // Now have a message: is it our ACK?
-            if (   (from == address || address == RH_BROADCAST_ADDRESS)
-                    && to == _thisAddress
-                    && (flags & RH_FLAGS_ACK)
-                    && (id == thisSequenceNumber)) {
+            if (   (_from == address || address == RH_BROADCAST_ADDRESS)
+                    && _to == _thisAddress
+                    && (_flags & RH_FLAGS_ACK)
+                    && (_id == thisSequenceNumber)) {
                 uint8_t ack_code = ackbuf[0];
                 Serial.print("Received ACK id: ");
-                Serial.print(id);
+                Serial.print(_id);
                 Serial.print(" with code: ");
                 Serial.println(ack_code);
                 if (ack_code == KL_ACK_CODE_ERROR_NO_ROUTE) {
@@ -503,18 +531,18 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
                 // if it's an ack to an arp, we should record the route
                 if (arp) {
                     Serial.println("Received ACK for ARP");
-                    addRouteTo(buf[0], from, _driver.lastRssi());
+                    addRouteTo(buf[0], _from, _driver.lastRssi());
                 }
                 return true;
-            } else if ( arp && to == RH_BROADCAST_ADDRESS) {
+            } else if ( arp && _to == RH_BROADCAST_ADDRESS) {
                 // this is an "I am here" broadcast response to our arp request
                 // route was added when signal received
                 //addRouteTo(from, from, _driver.lastRssi());
                 return true;
-            } else if (   !(flags & RH_FLAGS_ACK)
-                && (id == _seenIds[from])) {
+            } else if (   !(_flags & RH_FLAGS_ACK)
+                && (_id == _seenIds[_from])) {
                 // This is a request we have already received. ACK it again
-                acknowledge(id, from);
+                acknowledge(_id, _from);
             }
             // Else discard it
         }
@@ -538,10 +566,10 @@ uint8_t KnightLab_LoRaRouter::route(RoutedMessage* message, uint8_t messageLen)
     if (message->header.dest != RH_BROADCAST_ADDRESS) {
         uint8_t route = getRouteTo(message->header.dest);
         if (!route) {
-            Serial.print("No route to dest: ");
-            Serial.println(message->header.dest);
             if (discover_routes) {
-                Serial.println("Attempting to discover route");
+                Serial.print("No route to dest: ");
+                Serial.print(message->header.dest);
+                Serial.println(". Attempting to discover route");
                 route = doArp(message->header.dest);
             }
             if (!route) {
@@ -550,7 +578,7 @@ uint8_t KnightLab_LoRaRouter::route(RoutedMessage* message, uint8_t messageLen)
         }
         next_hop = route;
     }
-    if (!routeHelper((uint8_t*)message, messageLen, next_hop)) {
+    if (!routeHelper((uint8_t*)message, messageLen, next_hop, 0x00)) {
         return RH_ROUTER_ERROR_UNABLE_TO_DELIVER;
     }
     return RH_ROUTER_ERROR_NONE;
