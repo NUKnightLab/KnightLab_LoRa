@@ -337,10 +337,10 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
     #if RH_TEST_NETWORK==1
         // This network looks like 1-2-3-4
         if ( !(
-           (_thisAddress == 1 && _from == 2)
-        || (_thisAddress == 2 && (_from == 1 || _from == 3))
-        || (_thisAddress == 3 && (_from == 2 || _from == 4))
-        || (_thisAddress == 4 && _from == 3))) {
+           (_thisAddress == 1 && from == 2)
+        || (_thisAddress == 2 && (from == 1 || from == 3))
+        || (_thisAddress == 3 && (from == 2 || from == 4))
+        || (_thisAddress == 4 && from == 3))) {
             return false;
         }
     #elif RH_TEST_NETWORK==2
@@ -348,10 +348,10 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
            //                         | | |
            //                         --3--
         if ( !(
-           (_thisAddress == 1 && (_from == 2 || _from == 3))
+           (_thisAddress == 1 && (from == 2 || from == 3))
         ||  _thisAddress == 2
         ||  _thisAddress == 3
-        || (_thisAddress == 4 && (_from == 2 || _from == 3))) {
+        || (_thisAddress == 4 && (from == 2 || from == 3))) {
             return false;
         }
     #elif RH_TEST_NETWORK==3
@@ -359,10 +359,10 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
            //                         |   |
            //                         --3--
         if ( !(
-           (_thisAddress == 1 && (_from == 2 || _from == 3))
-        || (_thisAddress == 2 && (_from == 1 || _from == 4))
-        || (_thisAddress == 3 && (_from == 1 || _from == 4))
-        || (_thisAddress == 4 && (_from == 2 || _from == 3))) {
+           (_thisAddress == 1 && (from == 2 || from == 3))
+        || (_thisAddress == 2 && (from == 1 || from == 4))
+        || (_thisAddress == 3 && (from == 1 || from == 4))
+        || (_thisAddress == 4 && (from == 2 || from == 3))) {
             return false;
         }
     #elif RH_TEST_NETWORK==4
@@ -370,10 +370,10 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
            //                           |
            //                           4
         if ( !(
-           (_thisAddress == 1 && _from == 2)
+           (_thisAddress == 1 && from == 2)
         ||  _thisAddress == 2
-        || (_thisAddress == 3 && _from == 2)
-        || (_thisAddress == 4 && _from == 2) ) {
+        || (_thisAddress == 3 && from == 2)
+        || (_thisAddress == 4 && from == 2) ) {
             return false;
         }
     #endif
