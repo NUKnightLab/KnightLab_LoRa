@@ -81,6 +81,7 @@ public:
     void clearRoutingTable();
     void broadcastClearRoutingTable();
     void printRoutingTable();
+    bool passesTopologyTest(uint8_t from);
     //void initializeAllRoutes();
 
 protected:

@@ -100,7 +100,6 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
     uint8_t _id;
     uint8_t _flags;
 
-
     // Get the message before its clobbered by the ACK (shared rx and tx buffer in some drivers
     if (available() && recvfrom(buf, len, &_from, &_to, &_id, &_flags)) {
 
@@ -192,57 +191,6 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
     //if (RHReliableDatagram::recvfromAck((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     if (recvfromAckHelper((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     {
-    // Here we simulate networks with limited visibility between nodes
-    // so we can test routing
-/*
-
-#ifdef RH_TEST_NETWORK
-    if (
-#if RH_TEST_NETWORK==1
-        // This network looks like 1-2-3-4
-           (_thisAddress == 1 && _from == 2)
-        || (_thisAddress == 2 && (_from == 1 || _from == 3))
-        || (_thisAddress == 3 && (_from == 2 || _from == 4))
-        || (_thisAddress == 4 && _from == 3)
-#elif RH_TEST_NETWORK==2
-           // This network looks like 1-2-4
-           //                         | | |
-           //                         --3--
-           (_thisAddress == 1 && (_from == 2 || _from == 3))
-        ||  _thisAddress == 2
-        ||  _thisAddress == 3
-        || (_thisAddress == 4 && (_from == 2 || _from == 3))
-#elif RH_TEST_NETWORK==3
-           // This network looks like 1-2-4
-           //                         |   |
-           //                         --3--
-           (_thisAddress == 1 && (_from == 2 || _from == 3))
-        || (_thisAddress == 2 && (_from == 1 || _from == 4))
-        || (_thisAddress == 3 && (_from == 1 || _from == 4))
-        || (_thisAddress == 4 && (_from == 2 || _from == 3))
-#elif RH_TEST_NETWORK==4
-           // This network looks like 1-2-3
-           //                           |
-           //                           4
-           (_thisAddress == 1 && _from == 2)
-        ||  _thisAddress == 2
-        || (_thisAddress == 3 && _from == 2)
-        || (_thisAddress == 4 && _from == 2)
-#endif
-)
-    {
-        // OK
-    }
-    else
-    {
-        Serial.print("Ignoring message from ");
-        Serial.print(_from);
-        Serial.println(" for testing purposes.");
-        return false; // Pretend we got nothing
-    }
-#endif
-
-*/
     peekAtMessage(&_tmpMessage, tmpMessageLen);
     // See if its for us or has to be routed
     if ( _tmpMessage.header.dest == _thisAddress
@@ -437,23 +385,8 @@ int16_t KnightLab_LoRaRouter::getRouteSignalStrength(uint8_t dest) {
     return -((int16_t)_route_signal_strength[dest]);
 }
 
-bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, uint8_t* to, uint8_t* id, uint8_t* flags)
+bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
 {
-    Serial.println("KnightLab_LoRaRouter::recvfrom");
-    bool ret = RHDatagram::recvfrom(buf, len, from, to, id, flags);
-
-    // check for test controls before conforming to test network topology
-    if (*to == RH_BROADCAST_ADDRESS && (*flags & KL_FLAGS_TEST_CONTROL)) {
-        Serial.print("Received test control with data: ");
-        Serial.println(buf[0]);
-        if (buf[0] == 1) {
-            Serial.println("CALLING clearRoutingTable");
-            clearRoutingTable();
-        }
-        _seenIds[*from] = *id;
-        return false;
-    }
-
     #if RH_TEST_NETWORK==1
         // This network looks like 1-2-3-4
         uint8_t _from = *from;
@@ -501,7 +434,27 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
             return false;
         }
     #endif
+    return true;
+}
 
+bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, uint8_t* to, uint8_t* id, uint8_t* flags)
+{
+    Serial.println("KnightLab_LoRaRouter::recvfrom");
+    bool ret = RHDatagram::recvfrom(buf, len, from, to, id, flags);
+    // check for test controls before conforming to test network topology
+    if (*to == RH_BROADCAST_ADDRESS && (*flags & KL_FLAGS_TEST_CONTROL)) {
+        Serial.print("Received test control with data: ");
+        Serial.println(buf[0]);
+        if (buf[0] == 1) {
+            Serial.println("CALLING clearRoutingTable");
+            clearRoutingTable();
+        }
+        _seenIds[*from] = *id;
+        return false;
+    }
+    if (!passesTopologyTest(*from)) {
+        return false;
+    }
     Serial.print("Received message ID: ");
     Serial.print(*id);
     Serial.print("; FROM: ");
@@ -512,9 +465,7 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     Serial.print(*to);
     Serial.print("; FLAGS: ");
     Serial.println(*flags, HEX);
-
     printRoutingTable();
-
     // Check every signal that comes in against the routing table to always be adding new
     // single-hop routes as we see them. We prefer single-hop over multi-hop if the RSSI > -80
     // or otherwise is stronger than the multi-hop route.
@@ -526,7 +477,6 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
                     || last_rssi > getRouteSignalStrength(*from)) )) {
             addRouteTo(*from, *from, last_rssi);
     }
-
     return ret;
 }
 
