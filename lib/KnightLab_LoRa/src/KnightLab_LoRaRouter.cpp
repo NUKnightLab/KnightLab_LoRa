@@ -336,7 +336,6 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
 {
     #if RH_TEST_NETWORK==1
         // This network looks like 1-2-3-4
-        uint8_t _from = *from;
         if ( !(
            (_thisAddress == 1 && _from == 2)
         || (_thisAddress == 2 && (_from == 1 || _from == 3))
@@ -348,7 +347,6 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
            // This network looks like 1-2-4
            //                         | | |
            //                         --3--
-        uint8_t _from = *from;
         if ( !(
            (_thisAddress == 1 && (_from == 2 || _from == 3))
         ||  _thisAddress == 2
@@ -360,7 +358,6 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
            // This network looks like 1-2-4
            //                         |   |
            //                         --3--
-        uint8_t _from = *from;
         if ( !(
            (_thisAddress == 1 && (_from == 2 || _from == 3))
         || (_thisAddress == 2 && (_from == 1 || _from == 4))
@@ -372,7 +369,6 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
            // This network looks like 1-2-3
            //                           |
            //                           4
-        uint8_t _from = *from;
         if ( !(
            (_thisAddress == 1 && _from == 2)
         ||  _thisAddress == 2
