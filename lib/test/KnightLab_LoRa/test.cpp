@@ -44,6 +44,8 @@ namespace Test_KnightLab_LoRa {
     }
 
     void test_long_echo(void) {
+        LoRaRouter->broadcastClearRoutingTable();
+        LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, sizeof(long_msg));
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
@@ -71,14 +73,14 @@ namespace Test_KnightLab_LoRa {
     }
 
     void test_long_hopped_send_receive(void) {
-        TEST_ASSERT_EQUAL(
-            HOPPED_TEST_SERVER_ID,
-            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID));
-        LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
-        TEST_ASSERT_EQUAL(
-            TEST_SERVER_ID,
-            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)
-        );
+        LoRaRouter->broadcastClearRoutingTable();
+        LoRaRouter->clearRoutingTable();
+        TEST_ASSERT_EQUAL( 0, LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID));
+        //LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        //TEST_ASSERT_EQUAL(
+        //    TEST_SERVER_ID,
+        //    LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)
+        //);
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             //sendLoRaMessage(long_msg, KL_LORA_MAX_MESSAGE_LEN, HOPPED_TEST_SERVER_ID)
@@ -89,7 +91,7 @@ namespace Test_KnightLab_LoRa {
         uint8_t source;
         uint8_t dest;
         TEST_ASSERT_TRUE(
-            LoRaRouter->recvfromAckTimeout(buf, &len, 7000, &source, &dest));
+            LoRaRouter->recvfromAckTimeout(buf, &len, 2000, &source, &dest));
         TEST_ASSERT_EQUAL(HOPPED_TEST_SERVER_ID, source);
         TEST_ASSERT_EQUAL(node_id, dest);
         //TEST_ASSERT_EQUAL(KL_LORA_MAX_MESSAGE_LEN, len);
@@ -137,6 +139,7 @@ namespace Test_KnightLab_LoRa {
         uint8_t buf[KL_ROUTER_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
         uint8_t from;
+        LoRaRouter->broadcastClearRoutingTable();
         LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(TEST_SERVER_ID));
         TEST_ASSERT_EQUAL(
@@ -217,15 +220,14 @@ namespace Test_KnightLab_LoRa {
         RUN_TEST(KnightLab_LoRa__test_test);
         RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
         RUN_TEST(test_doArp);
-        return;
         //RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
         //RUN_TEST(test_echo); RUN_TEST(test_echo);
-        //RUN_TEST(test_long_echo);
-        //RUN_TEST(test_sendLoRaMessage);
+        RUN_TEST(test_long_echo);
+        RUN_TEST(test_sendLoRaMessage);
         //RUN_TEST(test_getLastFrom);
         #ifdef RH_TEST_NETWORK 
         #if RH_TEST_NETWORK == 1
-        //RUN_TEST(test_long_hopped_send_receive);
+        RUN_TEST(test_long_hopped_send_receive);
         #endif
         #endif
     }
