@@ -80,6 +80,7 @@ public:
     uint8_t getSequenceNumber();
     void clearRoutingTable();
     void broadcastClearRoutingTable();
+    void printRoutingTable();
     //void initializeAllRoutes();
 
 protected:

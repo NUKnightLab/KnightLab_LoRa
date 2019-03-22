@@ -138,6 +138,7 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             }
             return false; // done processing ARP
         } else if (_to ==_thisAddress) {
+            setHeaderFlags(RH_FLAGS_NONE, KL_FLAGS_ARP); // Clear the ARP flag before acking
             Serial.print("RECEIVED ACKABLE REQUEST _to: ");
             Serial.print(_to);
             Serial.print("; dest: ");
@@ -152,12 +153,29 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
         }
         // If we have not seen this message before, then we are interested in it
         if (_id != _seenIds[_from]) {
+            Serial.print("Have not seen this message before FROM: ");
+            Serial.print(_from);
+            Serial.print("; TO: ");
+            Serial.print(_to);
+            Serial.print("; ID: ");
+            Serial.print(_id);
+            Serial.print("; FLAGS: ");
+            Serial.println(_flags);
             if (from)  *from =  _from;
             if (to)    *to =    _to;
             if (id)    *id =    _id;
             if (flags) *flags = _flags;
             _seenIds[_from] = _id;
             return true;
+        } else {
+            Serial.print("Apparently we'v already seen this message?");
+            Serial.print(_from);
+            Serial.print("; TO: ");
+            Serial.print(_to);
+            Serial.print("; ID: ");
+            Serial.print(_id);
+            Serial.print("; FLAGS: ");
+            Serial.println(_flags);
         }
     }
     return false;
@@ -375,6 +393,21 @@ uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
     return getRouteTo(dest);
 }
 
+void KnightLab_LoRaRouter::printRoutingTable()
+{
+    Serial.println("ROUTING TABLE: ");
+    for (uint8_t i=1; i<255; i++) {
+        if (_static_routes[i]) {
+            Serial.print(i);
+            Serial.print(" -> ");
+            Serial.print(_static_routes[i]);
+            Serial.print(" (");
+            Serial.print(getRouteSignalStrength(i));
+            Serial.println("dB)");
+        }
+    }
+}
+
 void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rssi)
 {
     Serial.print("Adding route TO: ");
@@ -383,17 +416,7 @@ void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rs
     Serial.println(next_hop);
 	_static_routes[dest] = next_hop;
     setRouteSignalStrength(dest, rssi);
-    Serial.println("ROUTING TABLE: ");
-    for (uint8_t i=1; i<255; i++) {
-        if (_static_routes[i]) {
-            Serial.print(i);
-            Serial.print(" -> ");
-            Serial.print(_static_routes[i]);
-            Serial.print(" (");
-            Serial.print(getRouteSignalStrength(dest));
-            Serial.println("dB)");
-        }
-    }
+    printRoutingTable();
 }
 
 void KnightLab_LoRaRouter::setRouteSignalStrength(uint8_t dest, int16_t rssi) {
@@ -415,11 +438,7 @@ int16_t KnightLab_LoRaRouter::getRouteSignalStrength(uint8_t dest) {
 bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, uint8_t* to, uint8_t* id, uint8_t* flags)
 {
     Serial.println("KnightLab_LoRaRouter::recvfrom");
-    Serial.print("Starting with flags: ");
-    Serial.println(*flags);
     bool ret = RHDatagram::recvfrom(buf, len, from, to, id, flags);
-    Serial.print("Flags after RHDatagram::recvfrom: ");
-    Serial.println(*flags);
 
     // check for test controls before conforming to test network topology
     if (*to == RH_BROADCAST_ADDRESS && (*flags & KL_FLAGS_TEST_CONTROL)) {
@@ -429,6 +448,7 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
             Serial.println("CALLING clearRoutingTable");
             clearRoutingTable();
         }
+        _seenIds[*from] = *id;
         return false;
     }
 
@@ -454,6 +474,8 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     Serial.print(*to);
     Serial.print("; FLAGS: ");
     Serial.println(*flags, HEX);
+
+    printRoutingTable();
 
     // Check every signal that comes in against the routing table to always be adding new
     // single-hop routes as we see them. We prefer single-hop over multi-hop if the RSSI > -80
@@ -500,6 +522,8 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     Serial.print(len);
     Serial.print("; TO: ");
     Serial.print(address);
+    Serial.print("; ID: ");
+    Serial.print(thisSequenceNumber);
     Serial.print("; ARP: ");
     Serial.println(arp);
     sendto(buf, len, address);

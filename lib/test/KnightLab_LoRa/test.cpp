@@ -177,24 +177,16 @@ namespace Test_KnightLab_LoRa {
         // Force next server to arp hopped server by sending it a routed message even though
         // we currently have no valid route. You wouldn't normally do this unless somehow you
         // know that the route actually exists.
-
-        //delay(3000);
         uint8_t msg[] = "FORCE ARP";
         LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
         /// We expect this to fail delivery b/c the receiving node does not yet have a route to the dest
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_UNABLE_TO_DELIVER,
             sendLoRaMessage(msg, sizeof(msg), HOPPED_TEST_SERVER_ID, KL_FLAGS_NOECHO));
-        // having received the forced route, there will now be a route to the dest which we can
+        // Having received the forced route, there will now be a route to the dest which we can
         // acquire with an arp
-
-        ***
-        pass/fail seems to be determined by whether or not we do this clear, but the root problem
-        seems to be that node 2 is not re-acquiring the route to 1 after a broadcast clear
-        ***
-
         LoRaRouter->clearRoutingTable();
-        //LoRaRouter->setRetries(0);
+        LoRaRouter->setRetries(0); // reduce testing overhead
         TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(HOPPED_TEST_SERVER_ID));
         TEST_ASSERT_EQUAL(4, LoRaRouter->doArp(4));
     }
@@ -223,7 +215,7 @@ namespace Test_KnightLab_LoRa {
          */
 
         RUN_TEST(KnightLab_LoRa__test_test);
-        //RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
+        RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
         RUN_TEST(test_doArp);
         return;
         //RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
