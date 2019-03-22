@@ -21,7 +21,7 @@ KnightLab_LoRaRouter::KnightLab_LoRaRouter(RHGenericDriver& driver, uint8_t this
     // 0 indicates no messages received from that node. Thus _lastSequenceNumber increment is
     // modified not to use 0
     memset(_seenIds, 0, sizeof(_seenIds));
-	_max_hops = RH_DEFAULT_MAX_HOPS;
+    _max_hops = RH_DEFAULT_MAX_HOPS;
     clearRoutingTable();
 }
 
@@ -32,7 +32,7 @@ bool KnightLab_LoRaRouter::init()
 {
     bool ret = RHDatagram::init();
     if (ret)
-	_max_hops = RH_DEFAULT_MAX_HOPS;
+    _max_hops = RH_DEFAULT_MAX_HOPS;
     return ret;
 }
 
@@ -65,11 +65,11 @@ uint8_t KnightLab_LoRaRouter::getRouteTo(uint8_t dest)
     if (dest == 255) {
         return 255;
     }
-	return _static_routes[dest];
+    return _static_routes[dest];
     //uint8_t i;
     //for (i = 0; i < RH_ROUTING_TABLE_SIZE; i++)
-	//if (_routes[i].dest == dest && _routes[i].state != Invalid)
-	//    return &_routes[i];
+    //if (_routes[i].dest == dest && _routes[i].state != Invalid)
+    //    return &_routes[i];
     //return NULL;
 }
 
@@ -81,7 +81,7 @@ uint8_t KnightLab_LoRaRouter::sendtoWait(uint8_t* buf, uint8_t len, uint8_t dest
 uint8_t KnightLab_LoRaRouter::sendtoFromSourceWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t source, uint8_t flags)
 {
     if (((uint16_t)len + sizeof(RoutedMessageHeader)) > _driver.maxMessageLength())
-	return RH_ROUTER_ERROR_INVALID_LENGTH;
+    return RH_ROUTER_ERROR_INVALID_LENGTH;
     // Construct a RH RouterMessage message
     _tmpMessage.header.source = source;
     _tmpMessage.header.dest = dest;
@@ -192,99 +192,101 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
     //if (RHReliableDatagram::recvfromAck((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     if (recvfromAckHelper((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     {
-	// Here we simulate networks with limited visibility between nodes
-	// so we can test routing
+    // Here we simulate networks with limited visibility between nodes
+    // so we can test routing
 /*
+
 #ifdef RH_TEST_NETWORK
-	if (
+    if (
 #if RH_TEST_NETWORK==1
-	    // This network looks like 1-2-3-4
-	       (_thisAddress == 1 && _from == 2)
-	    || (_thisAddress == 2 && (_from == 1 || _from == 3))
-	    || (_thisAddress == 3 && (_from == 2 || _from == 4))
-	    || (_thisAddress == 4 && _from == 3)
+        // This network looks like 1-2-3-4
+           (_thisAddress == 1 && _from == 2)
+        || (_thisAddress == 2 && (_from == 1 || _from == 3))
+        || (_thisAddress == 3 && (_from == 2 || _from == 4))
+        || (_thisAddress == 4 && _from == 3)
 #elif RH_TEST_NETWORK==2
-	       // This network looks like 1-2-4
-	       //                         | | |
-	       //                         --3--
-	       (_thisAddress == 1 && (_from == 2 || _from == 3))
-	    ||  _thisAddress == 2
-	    ||  _thisAddress == 3
-	    || (_thisAddress == 4 && (_from == 2 || _from == 3))
+           // This network looks like 1-2-4
+           //                         | | |
+           //                         --3--
+           (_thisAddress == 1 && (_from == 2 || _from == 3))
+        ||  _thisAddress == 2
+        ||  _thisAddress == 3
+        || (_thisAddress == 4 && (_from == 2 || _from == 3))
 #elif RH_TEST_NETWORK==3
-	       // This network looks like 1-2-4
-	       //                         |   |
-	       //                         --3--
-	       (_thisAddress == 1 && (_from == 2 || _from == 3))
-	    || (_thisAddress == 2 && (_from == 1 || _from == 4))
-	    || (_thisAddress == 3 && (_from == 1 || _from == 4))
-	    || (_thisAddress == 4 && (_from == 2 || _from == 3))
+           // This network looks like 1-2-4
+           //                         |   |
+           //                         --3--
+           (_thisAddress == 1 && (_from == 2 || _from == 3))
+        || (_thisAddress == 2 && (_from == 1 || _from == 4))
+        || (_thisAddress == 3 && (_from == 1 || _from == 4))
+        || (_thisAddress == 4 && (_from == 2 || _from == 3))
 #elif RH_TEST_NETWORK==4
-	       // This network looks like 1-2-3
-	       //                           |
-	       //                           4
-	       (_thisAddress == 1 && _from == 2)
-	    ||  _thisAddress == 2
-	    || (_thisAddress == 3 && _from == 2)
-	    || (_thisAddress == 4 && _from == 2)
+           // This network looks like 1-2-3
+           //                           |
+           //                           4
+           (_thisAddress == 1 && _from == 2)
+        ||  _thisAddress == 2
+        || (_thisAddress == 3 && _from == 2)
+        || (_thisAddress == 4 && _from == 2)
 #endif
 )
-	{
-	    // OK
-	}
-	else
-	{
-		Serial.print("Ignoring message from ");
-		Serial.print(_from);
-		Serial.println(" for testing purposes.");
-	    return false; // Pretend we got nothing
-	}
+    {
+        // OK
+    }
+    else
+    {
+        Serial.print("Ignoring message from ");
+        Serial.print(_from);
+        Serial.println(" for testing purposes.");
+        return false; // Pretend we got nothing
+    }
 #endif
+
 */
-	peekAtMessage(&_tmpMessage, tmpMessageLen);
-	// See if its for us or has to be routed
-	if ( _tmpMessage.header.dest == _thisAddress
+    peekAtMessage(&_tmpMessage, tmpMessageLen);
+    // See if its for us or has to be routed
+    if ( _tmpMessage.header.dest == _thisAddress
         || (_tmpMessage.header.dest == RH_BROADCAST_ADDRESS ))
             //&& !(_tmpMessage.header.flags & KL_FLAGS_ARP) )) // don't rebroadcast a broadcast arp
-	{
-	    // Deliver it here
-	    if (source) *source  = _tmpMessage.header.source;
-	    if (dest)   *dest    = _tmpMessage.header.dest;
-	    if (id)     *id      = _tmpMessage.header.id;
-	    if (flags)  *flags   = _tmpMessage.header.flags;
+    {
+        // Deliver it here
+        if (source) *source  = _tmpMessage.header.source;
+        if (dest)   *dest    = _tmpMessage.header.dest;
+        if (id)     *id      = _tmpMessage.header.id;
+        if (flags)  *flags   = _tmpMessage.header.flags;
         Serial.print("Calculating message length from tmpMessageLen: ");
         Serial.print(tmpMessageLen);
         Serial.print(" and sizeof(RoutedMessageHeader: ");
         Serial.println(sizeof(RoutedMessageHeader));
-	    uint8_t msgLen = tmpMessageLen - sizeof(RoutedMessageHeader);
-	    if (*len > msgLen) {
-		    *len = msgLen;
+        uint8_t msgLen = tmpMessageLen - sizeof(RoutedMessageHeader);
+        if (*len > msgLen) {
+            *len = msgLen;
         }
-	    memcpy(buf, _tmpMessage.data, *len);
-	    return true; // Its for you!
-	}
-	else if (   _tmpMessage.header.dest != RH_BROADCAST_ADDRESS
-		 && getRouteTo(_tmpMessage.header.dest) != _from // a precaution against bouncing but is this needed?
-		 && _tmpMessage.header.hops++ < _max_hops)
+        memcpy(buf, _tmpMessage.data, *len);
+        return true; // Its for you!
+    }
+    else if (   _tmpMessage.header.dest != RH_BROADCAST_ADDRESS
+         && getRouteTo(_tmpMessage.header.dest) != _from // a precaution against bouncing but is this needed?
+         && _tmpMessage.header.hops++ < _max_hops)
          //&& getRouteTo(_tmpMessage.header.dest)) // don't forward if we don't already have a route
-	{
-		/**
-		 * In this condition, we've added a check that the route to the destination is not
-		 * the same as the node this message just came from in order to avoid merely bouncing
-		 * messages. A future route discovery protocol might require us to rethink this. -SBB
-		 */
-		Serial.print("Routing message to: ");
-		Serial.print(_tmpMessage.header.dest);
-		Serial.print(" via ");
-		Serial.println(getRouteTo(_tmpMessage.header.dest));
+    {
+        /**
+         * In this condition, we've added a check that the route to the destination is not
+         * the same as the node this message just came from in order to avoid merely bouncing
+         * messages. A future route discovery protocol might require us to rethink this. -SBB
+         */
+        Serial.print("Routing message to: ");
+        Serial.print(_tmpMessage.header.dest);
+        Serial.print(" via ");
+        Serial.println(getRouteTo(_tmpMessage.header.dest));
         Serial.print("WITH FLAGS: ");
         Serial.println(_tmpMessage.header.flags);
-	    // Maybe it has to be routed to the next hop
-	    // REVISIT: if it fails due to no route or unable to deliver to the next hop, 
-	    // tell the originator. BUT HOW?
-	    route(&_tmpMessage, tmpMessageLen);
-	}
-	// Discard it and maybe wait for another
+        // Maybe it has to be routed to the next hop
+        // REVISIT: if it fails due to no route or unable to deliver to the next hop, 
+        // tell the originator. BUT HOW?
+        route(&_tmpMessage, tmpMessageLen);
+    }
+    // Discard it and maybe wait for another
     }
     return false;
 }
@@ -358,10 +360,10 @@ void KnightLab_LoRaRouter::ackError(uint8_t id, uint8_t from, uint8_t error_code
 void KnightLab_LoRaRouter::clearRoutingTable()
 {
     Serial.println("Clearing routing table");
-	for (uint8_t i=0; i<sizeof(_static_routes); i++) {
-		_static_routes[i] = 0;
+    for (uint8_t i=0; i<sizeof(_static_routes); i++) {
+        _static_routes[i] = 0;
         _route_signal_strength[i] = 255;
-	}
+    }
 }
 
 void KnightLab_LoRaRouter::broadcastClearRoutingTable()
@@ -373,13 +375,13 @@ void KnightLab_LoRaRouter::broadcastClearRoutingTable()
 
 //void KnightLab_LoRaRouter::initializeAllRoutes()
 //{
-//	for (uint8_t i=0; i<sizeof(_static_routes); i++) {
-//		_static_routes[i] = i;
-//	}
+//    for (uint8_t i=0; i<sizeof(_static_routes); i++) {
+//        _static_routes[i] = i;
+//    }
 //}
 
 uint8_t KnightLab_LoRaRouter::getSequenceNumber() {
-	return _lastE2ESequenceNumber;
+    return _lastE2ESequenceNumber;
 }
 
 /**
@@ -414,7 +416,7 @@ void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rs
     Serial.print(dest);
     Serial.print(" VIA: ");
     Serial.println(next_hop);
-	_static_routes[dest] = next_hop;
+    _static_routes[dest] = next_hop;
     setRouteSignalStrength(dest, rssi);
     printRoutingTable();
 }
@@ -453,13 +455,49 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     }
 
     #if RH_TEST_NETWORK==1
-	    // This network looks like 1-2-3-4
+        // This network looks like 1-2-3-4
         uint8_t _from = *from;
         if ( !(
-	       (_thisAddress == 1 && _from == 2)
-	    || (_thisAddress == 2 && (_from == 1 || _from == 3))
-	    || (_thisAddress == 3 && (_from == 2 || _from == 4))
-	    || (_thisAddress == 4 && _from == 3))) {
+           (_thisAddress == 1 && _from == 2)
+        || (_thisAddress == 2 && (_from == 1 || _from == 3))
+        || (_thisAddress == 3 && (_from == 2 || _from == 4))
+        || (_thisAddress == 4 && _from == 3))) {
+            return false;
+        }
+    #elif RH_TEST_NETWORK==2
+           // This network looks like 1-2-4
+           //                         | | |
+           //                         --3--
+        uint8_t _from = *from;
+        if ( !(
+           (_thisAddress == 1 && (_from == 2 || _from == 3))
+        ||  _thisAddress == 2
+        ||  _thisAddress == 3
+        || (_thisAddress == 4 && (_from == 2 || _from == 3))) {
+            return false;
+        }
+    #elif RH_TEST_NETWORK==3
+           // This network looks like 1-2-4
+           //                         |   |
+           //                         --3--
+        uint8_t _from = *from;
+        if ( !(
+           (_thisAddress == 1 && (_from == 2 || _from == 3))
+        || (_thisAddress == 2 && (_from == 1 || _from == 4))
+        || (_thisAddress == 3 && (_from == 1 || _from == 4))
+        || (_thisAddress == 4 && (_from == 2 || _from == 3))) {
+            return false;
+        }
+    #elif RH_TEST_NETWORK==4
+           // This network looks like 1-2-3
+           //                           |
+           //                           4
+        uint8_t _from = *from;
+        if ( !(
+           (_thisAddress == 1 && _from == 2)
+        ||  _thisAddress == 2
+        || (_thisAddress == 3 && _from == 2)
+        || (_thisAddress == 4 && _from == 2) ) {
             return false;
         }
     #endif
@@ -600,26 +638,26 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
 ////////////////////////////////////////////////////////////////////
 uint8_t KnightLab_LoRaRouter::route(RoutedMessage* message, uint8_t messageLen)
 {
-	bool discover_routes = true; // waiting for arpable reliable datagram
+    bool discover_routes = true; // waiting for arpable reliable datagram
     // Reliably deliver it if possible. See if we have a route:
     uint8_t next_hop = RH_BROADCAST_ADDRESS;
     if (message->header.dest != RH_BROADCAST_ADDRESS) {
-		uint8_t route = getRouteTo(message->header.dest);
-		if (!route) {
-			Serial.print("No route to dest: ");
-			Serial.println(message->header.dest);
-			if (discover_routes) {
+        uint8_t route = getRouteTo(message->header.dest);
+        if (!route) {
+            Serial.print("No route to dest: ");
+            Serial.println(message->header.dest);
+            if (discover_routes) {
                 Serial.println("Attempting to discover route");
                 route = doArp(message->header.dest);
             }
             if (!route) {
-	    		return RH_ROUTER_ERROR_NO_ROUTE;
+                return RH_ROUTER_ERROR_NO_ROUTE;
             }
-		}
-		next_hop = route;
+        }
+        next_hop = route;
     }
     if (!routeHelper((uint8_t*)message, messageLen, next_hop)) {
-		return RH_ROUTER_ERROR_UNABLE_TO_DELIVER;
-	}
+        return RH_ROUTER_ERROR_UNABLE_TO_DELIVER;
+    }
     return RH_ROUTER_ERROR_NONE;
 }
