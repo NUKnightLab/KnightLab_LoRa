@@ -105,13 +105,6 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
 
         // ACK
         if (_flags & RH_FLAGS_ACK) {
-            // route was added when signal received
-            //if (_to == RH_BROADCAST_ADDRESS) { // A broadcast ACK is an "I am here" message
-            //    if (!getRouteTo(_from)) {
-            //        addRouteTo(_from, _from, _driver.lastRssi());
-            //        // TODO: track the rssi value in case we find a better route later
-            //    }
-            //} 
             Serial.print("Received ACK with data: ");
             Serial.println(buf[5]);
             return false;
@@ -123,27 +116,13 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
         if (_flags & KL_FLAGS_ARP) {
             setHeaderFlags(RH_FLAGS_NONE, KL_FLAGS_ARP); // Clear the ARP flag before acking
             if (_to == _thisAddress) {
-                //acknowledge(_id, _from, &_thisAddress, 1);
-                //acknowledge(_id, _from);
                 acknowledge(_id, RH_BROADCAST_ADDRESS); // let everybody know I'm here, not just the requestor
             } else if (_to == RH_BROADCAST_ADDRESS && getRouteTo(dest)> 0) {
-                // TODO: should this depend on the quality of the route?
-                Serial.print("I have that route: ");
-                Serial.println(dest);
                 acknowledge(_id, _from);
-                //acknowledge(_id, _from, &(_seenIds[_from]), 1);
-                // we need to flatten this structure in order for an arp ack to access routing info
-                //acknowledgeArp(_id, _from);
             }
             return false; // done processing ARP
         } else if (_to ==_thisAddress) {
             setHeaderFlags(RH_FLAGS_NONE, KL_FLAGS_ARP); // Clear the ARP flag before acking
-            Serial.print("RECEIVED ACKABLE REQUEST _to: ");
-            Serial.print(_to);
-            Serial.print("; dest: ");
-            Serial.print(dest);
-            Serial.print("; getRouteTo(dest): ");
-            Serial.println(getRouteTo(dest));
             if (_to == dest || getRouteTo(dest)) {
                 acknowledge(_id, _from);
             } else {
@@ -152,29 +131,12 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
         }
         // If we have not seen this message before, then we are interested in it
         if (_id != _seenIds[_from]) {
-            Serial.print("Have not seen this message before FROM: ");
-            Serial.print(_from);
-            Serial.print("; TO: ");
-            Serial.print(_to);
-            Serial.print("; ID: ");
-            Serial.print(_id);
-            Serial.print("; FLAGS: ");
-            Serial.println(_flags);
             if (from)  *from =  _from;
             if (to)    *to =    _to;
             if (id)    *id =    _id;
             if (flags) *flags = _flags;
             _seenIds[_from] = _id;
             return true;
-        } else {
-            Serial.print("Apparently we'v already seen this message?");
-            Serial.print(_from);
-            Serial.print("; TO: ");
-            Serial.print(_to);
-            Serial.print("; ID: ");
-            Serial.print(_id);
-            Serial.print("; FLAGS: ");
-            Serial.println(_flags);
         }
     }
     return false;
@@ -188,7 +150,6 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
     uint8_t _to;
     uint8_t _id;
     uint8_t _flags;
-    //if (RHReliableDatagram::recvfromAck((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     if (recvfromAckHelper((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     {
     peekAtMessage(&_tmpMessage, tmpMessageLen);
@@ -218,20 +179,6 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
          && _tmpMessage.header.hops++ < _max_hops)
          //&& getRouteTo(_tmpMessage.header.dest)) // don't forward if we don't already have a route
     {
-        /**
-         * In this condition, we've added a check that the route to the destination is not
-         * the same as the node this message just came from in order to avoid merely bouncing
-         * messages. A future route discovery protocol might require us to rethink this. -SBB
-         */
-        Serial.print("Routing message to: ");
-        Serial.print(_tmpMessage.header.dest);
-        Serial.print(" via ");
-        Serial.println(getRouteTo(_tmpMessage.header.dest));
-        Serial.print("WITH FLAGS: ");
-        Serial.println(_tmpMessage.header.flags);
-        // Maybe it has to be routed to the next hop
-        // REVISIT: if it fails due to no route or unable to deliver to the next hop, 
-        // tell the originator. BUT HOW?
         route(&_tmpMessage, tmpMessageLen);
     }
     // Discard it and maybe wait for another
@@ -437,6 +384,10 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
     return true;
 }
 
+/**
+ * Receive the next message, be sure it passes the topology test and add the sender to the
+ * routing table if appropriate.
+ */
 bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, uint8_t* to, uint8_t* id, uint8_t* flags)
 {
     Serial.println("KnightLab_LoRaRouter::recvfrom");
@@ -455,27 +406,24 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     if (!passesTopologyTest(*from)) {
         return false;
     }
-    Serial.print("Received message ID: ");
-    Serial.print(*id);
-    Serial.print("; FROM: ");
-    Serial.print(*from);
-    Serial.print("; LEN: ");
-    Serial.print(*len);
-    Serial.print("; TO: ");
-    Serial.print(*to);
-    Serial.print("; FLAGS: ");
-    Serial.println(*flags, HEX);
+    Serial.print("Received message ID: "); Serial.print(*id);
+    Serial.print("; FROM: "); Serial.print(*from);
+    Serial.print("; LEN: "); Serial.print(*len);
+    Serial.print("; TO: "); Serial.print(*to);
+    Serial.print("; FLAGS: "); Serial.println(*flags, HEX);
     printRoutingTable();
     // Check every signal that comes in against the routing table to always be adding new
     // single-hop routes as we see them. We prefer single-hop over multi-hop if the RSSI > -80
     // or otherwise is stronger than the multi-hop route.
-    uint8_t existing_route = getRouteTo(*from);
-    int16_t last_rssi = _driver.lastRssi();
-    if (!existing_route
-        || (existing_route != *from && (
-                    last_rssi > -80
-                    || last_rssi > getRouteSignalStrength(*from)) )) {
-            addRouteTo(*from, *from, last_rssi);
+    if (ret) {
+        uint8_t existing_route = getRouteTo(*from);
+        int16_t last_rssi = _driver.lastRssi();
+        if (!existing_route
+            || (existing_route != *from && (
+                        last_rssi > -80
+                        || last_rssi > getRouteSignalStrength(*from)) )) {
+                addRouteTo(*from, *from, last_rssi);
+        }
     }
     return ret;
 }
