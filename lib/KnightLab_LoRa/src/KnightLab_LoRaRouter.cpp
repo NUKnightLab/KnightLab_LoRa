@@ -2,6 +2,7 @@
 
 // Based on Mike McCauley's RHReliableDatagram but too many core changes to subclass
 
+#include <RH_RF95.h>
 #include <KnightLab_LoRaRouter.h>
 
 KnightLab_LoRaRouter::RoutedMessage KnightLab_LoRaRouter::_tmpMessage;
@@ -272,7 +273,45 @@ void KnightLab_LoRaRouter::clearRoutingTable()
 
 void KnightLab_LoRaRouter::broadcastClearRoutingTable()
 {
-    uint8_t buf[] = { 1 };
+    uint8_t buf[] = { KL_TEST_CONTROL_CLEAR_ROUTES };
+    uint8_t len = sizeof(buf);
+    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
+}
+
+void KnightLab_LoRaRouter::broadcastModemConfig()
+{
+    uint8_t buf[] = { KL_TEST_CONTROL_SET_MODEM_CONFIG };
+    uint8_t len = sizeof(buf);
+    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
+}
+
+/*
+void KnightLab_LoRaRouter::broadcastNoRetries()
+{
+    uint8_t buf[] = { KL_TEST_CONTROL_SET_RETRIES };
+    uint8_t len = sizeof(buf);
+    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
+}
+*/
+
+void KnightLab_LoRaRouter::broadcastRetries(uint8_t retries)
+{
+    uint8_t buf[] = { KL_TEST_CONTROL_SET_RETRIES, retries };
+    uint8_t len = sizeof(buf);
+    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
+}
+
+void KnightLab_LoRaRouter::broadcastTimeout(uint16_t timeout)
+{
+    uint8_t buf[] = { KL_TEST_CONTROL_SET_TIMEOUT, timeout >> 8, timeout & 0xff };
+    uint8_t len = sizeof(buf);
+    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
+}
+
+void KnightLab_LoRaRouter::broadcastCADTimeout(unsigned long timeout)
+{
+    uint8_t buf[] = { KL_TEST_CONTROL_SET_CAD_TIMEOUT,
+        timeout >> 32, timeout >> 16, timeout >> 8, timeout & 0xff };
     uint8_t len = sizeof(buf);
     routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
 }
@@ -401,9 +440,26 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     if (*to == RH_BROADCAST_ADDRESS && (*flags & KL_FLAGS_TEST_CONTROL)) {
         Serial.print("Received test control with data: ");
         Serial.println(buf[0]);
-        if (buf[0] == 1) {
+        if (buf[0] == KL_TEST_CONTROL_CLEAR_ROUTES) {
             Serial.println("CALLING clearRoutingTable");
             clearRoutingTable();
+        } else if (buf[0] == KL_TEST_CONTROL_SET_RETRIES) {
+            Serial.print("SETTING RETRIES: ");
+            Serial.println(buf[1]);
+            setRetries(buf[1]);
+        } else if (buf[0] == KL_TEST_CONTROL_SET_TIMEOUT) {
+            uint16_t timeout = (buf[1] << 8) | buf[2];
+            Serial.print("SETTING TIMEOUT: ");
+            Serial.println(timeout);
+            setTimeout(timeout);
+        } else if (buf[0] == KL_TEST_CONTROL_SET_CAD_TIMEOUT) {
+            unsigned long cad_timeout = (buf[1] << 32) | (buf[2] << 16 | buf[3] << 8 | buf[4]);
+            Serial.print("SETTING CAD TIMEOUT: ");
+            Serial.println(cad_timeout);
+            _driver.setCADTimeout(cad_timeout);
+        } else if (buf[0] == KL_TEST_CONTROL_SET_MODEM_CONFIG) {
+            Serial.println("SETTING MODEM CONFIG SLOW+LONG RANGE");
+            (reinterpret_cast<RH_RF95*>(&_driver))->setModemConfig(RH_RF95::Bw125Cr48Sf4096);
         }
         _seenIds[*from] = *id;
         return false;

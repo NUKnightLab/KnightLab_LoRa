@@ -17,6 +17,12 @@
 #define RH_DEFAULT_TIMEOUT 200
 #define RH_DEFAULT_RETRIES 3
 
+#define KL_TEST_CONTROL_CLEAR_ROUTES 1
+#define KL_TEST_CONTROL_SET_RETRIES 2
+#define KL_TEST_CONTROL_SET_TIMEOUT 3
+#define KL_TEST_CONTROL_SET_CAD_TIMEOUT 4
+#define KL_TEST_CONTROL_SET_MODEM_CONFIG 5
+
 #define RH_DEFAULT_MAX_HOPS 30
 
 // Error codes
@@ -82,6 +88,11 @@ public:
     uint8_t getSequenceNumber();
     void clearRoutingTable();
     void broadcastClearRoutingTable();
+    //void broadcastNoRetries();
+    void broadcastRetries(uint8_t retries);
+    void broadcastTimeout(uint16_t timeout);
+    void broadcastCADTimeout(unsigned long timeout);
+    void broadcastModemConfig();
     void printRoutingTable();
     bool passesTopologyTest(uint8_t from);
     //void initializeAllRoutes();

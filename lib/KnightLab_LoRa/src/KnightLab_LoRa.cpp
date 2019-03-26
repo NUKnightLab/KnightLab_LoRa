@@ -106,3 +106,4 @@ uint8_t sendAndReceiveLoRaMessage(uint8_t *msg, uint8_t len, uint8_t to_id, uint
     sendLoRaMessage(msg, len, to_id, flags);
     //LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
 }
+

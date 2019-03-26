@@ -14,6 +14,58 @@
 uint8_t node_id = 3;
 uint8_t long_msg[] = "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
 
+/**
+ * It seems that unity does not provide any setup mechanism for individual tests. Thus, for
+ * consistent, independent testing, call this setup for each function that tests wireless
+ * connectivity and routing.
+ * 
+ * Initializes testing conditions to:
+ *  - no retries
+ *  - default timeout
+ *  - CAD timeout of 500
+ *  - empty routing table
+ */
+void _setup()
+{
+    LoRaRouter->broadcastModemConfig();
+    LoRaRadio->setModemConfig(RH_RF95::Bw125Cr48Sf4096);
+
+    LoRaRouter->setRetries(0); // default retries is 3
+    LoRaRouter->broadcastRetries(0);
+
+    LoRaRouter->setTimeout(10000); // Default timeout is 200
+    LoRaRouter->broadcastTimeout(10000);
+
+    LoRaRadio->setCADTimeout(100000);
+    LoRaRouter->broadcastCADTimeout(100000);
+
+    LoRaRouter->broadcastClearRoutingTable();
+    LoRaRouter->clearRoutingTable();
+}
+
+/**
+ * Forces a hopped route by sending a message to the next hop even if not in the routing table.
+ * This will result in an arp on the next hop node as it tries to route the message to the
+ * destination. We wait out the arp by ensuring enough retries.
+ * 
+ * Designed for testing purposes only. It is not yet clear if a route forcing mechanism will be
+ * needed in deployment.
+ */
+uint8_t _forceRoute(uint8_t to, uint8_t next_hop)
+{
+    uint8_t retries_orig = LoRaRouter->retries();
+    if (retries_orig < 3) {
+        LoRaRouter->setRetries(3);
+    }
+    uint8_t msg[] = "FORCE ARP"; // informational only
+    LoRaRouter->addRouteTo(to, next_hop);
+    /// We expect this to fail delivery b/c the receiving node does not yet have a route to the dest
+    sendLoRaMessage(msg, sizeof(msg), to, KL_FLAGS_NOECHO);
+    uint8_t new_route = LoRaRouter->doArp(HOPPED_TEST_SERVER_ID);
+    LoRaRouter->setRetries(retries_orig);
+    return new_route;
+}
+
 namespace Test_KnightLab_LoRa {
 
     void KnightLab_LoRa__test_test(void) {
@@ -76,11 +128,12 @@ namespace Test_KnightLab_LoRa {
         LoRaRouter->broadcastClearRoutingTable();
         LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL( 0, LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID));
-        //LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
-        //TEST_ASSERT_EQUAL(
-        //    TEST_SERVER_ID,
-        //    LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)
-        //);
+        // force the route
+        LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        TEST_ASSERT_EQUAL(
+            TEST_SERVER_ID,
+            LoRaRouter->getRouteTo(HOPPED_TEST_SERVER_ID)
+        );
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             //sendLoRaMessage(long_msg, KL_LORA_MAX_MESSAGE_LEN, HOPPED_TEST_SERVER_ID)
@@ -128,6 +181,7 @@ namespace Test_KnightLab_LoRa {
     */
 
     void test_echo(void) {
+        _setup();
         static uint8_t last_seq = 255;
         uint8_t msg[] = "TEST ECHO";
         // RH_ROUTER_ERROR_NONE 0
@@ -139,9 +193,9 @@ namespace Test_KnightLab_LoRa {
         uint8_t buf[KL_ROUTER_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
         uint8_t from;
-        LoRaRouter->broadcastClearRoutingTable();
-        LoRaRouter->clearRoutingTable();
-        TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(TEST_SERVER_ID));
+        //LoRaRouter->broadcastClearRoutingTable();
+        //LoRaRouter->clearRoutingTable();
+        //TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(TEST_SERVER_ID));
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             LoRaRouter->sendtoWait(msg, sizeof(msg), TEST_SERVER_ID));
@@ -173,23 +227,23 @@ namespace Test_KnightLab_LoRa {
     }
     */
 
-    void test_doArp(void) {
-        LoRaRouter->broadcastClearRoutingTable();
-        LoRaRouter->clearRoutingTable();
-        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(TEST_SERVER_ID));
-        // Force next server to arp hopped server by sending it a routed message even though
-        // we currently have no valid route. You wouldn't normally do this unless somehow you
-        // know that the route actually exists.
-        uint8_t msg[] = "FORCE ARP";
-        LoRaRouter->addRouteTo(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
-        /// We expect this to fail delivery b/c the receiving node does not yet have a route to the dest
+    void test_forceRoute(void) {
+        _setup();
         TEST_ASSERT_EQUAL(
-            RH_ROUTER_ERROR_UNABLE_TO_DELIVER,
-            sendLoRaMessage(msg, sizeof(msg), HOPPED_TEST_SERVER_ID, KL_FLAGS_NOECHO));
-        // Having received the forced route, there will now be a route to the dest which we can
-        // acquire with an arp
+            TEST_SERVER_ID,
+            _forceRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID)
+        );
+    }
+
+    void test_doArp(void) {
+        _setup();
+        //LoRaRouter->setRetries(3);
+        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(TEST_SERVER_ID));
+        TEST_ASSERT_EQUAL(
+            TEST_SERVER_ID,
+            _forceRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID)
+        );
         LoRaRouter->clearRoutingTable();
-        LoRaRouter->setRetries(0); // reduce testing overhead
         TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(HOPPED_TEST_SERVER_ID));
         TEST_ASSERT_EQUAL(4, LoRaRouter->doArp(4));
     }
@@ -219,15 +273,14 @@ namespace Test_KnightLab_LoRa {
 
         RUN_TEST(KnightLab_LoRa__test_test);
         RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
+        RUN_TEST(test_forceRoute);
         RUN_TEST(test_doArp);
-        //RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
-        //RUN_TEST(test_echo); RUN_TEST(test_echo);
-        RUN_TEST(test_long_echo);
-        RUN_TEST(test_sendLoRaMessage);
+        //RUN_TEST(test_long_echo);
+        //RUN_TEST(test_sendLoRaMessage);
         //RUN_TEST(test_getLastFrom);
         #ifdef RH_TEST_NETWORK 
         #if RH_TEST_NETWORK == 1
-        RUN_TEST(test_long_hopped_send_receive);
+        //RUN_TEST(test_long_hopped_send_receive);
         #endif
         #endif
     }

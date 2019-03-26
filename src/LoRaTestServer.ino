@@ -20,6 +20,8 @@
 void setup() {
     Serial.begin(9600);
     //while (!Serial);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
     Serial.print("Executing with RadioHead version: ");
     Serial.print(RH_VERSION_MAJOR);
     Serial.print(".");
@@ -50,6 +52,7 @@ void loop() {
     uint8_t msg_id;
     uint8_t flags;
     if (LoRaRouter->recvfromAck(buf, &len, &source, &dest, &msg_id, &flags)) {
+        digitalWrite(LED_BUILTIN, HIGH);
         Serial.print("RECEIVED LEN: ");
         Serial.print(len);
         Serial.print("; HEADER FROM: ");
@@ -77,5 +80,6 @@ void loop() {
         }
         memset(buf, 0, sizeof(buf));
     }
+    digitalWrite(LED_BUILTIN, LOW);
 }
 #endif
