@@ -3,15 +3,16 @@
 #include <KnightLab_LoRa.h>
 #include "test.h"
 
-#define TEST_SERVER_ID 2
-#define HOPPED_TEST_SERVER_ID 1
+#define NEXT_NODE_ID 2
+#define ONE_HOP_NODE_ID 3
+#define TWO_HOPS_NODE_ID 4
 #define KL_FLAGS_NOECHO 0x80
 #define RH_TEST_NETWORK 1
 #define RF95_CS 8
 #define RF95_INT 3
 #define TX_POWER 5
 
-uint8_t node_id = 3;
+uint8_t node_id = 1;
 uint8_t long_msg[] = "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234";
 
 /**
@@ -75,7 +76,7 @@ uint8_t _forceRoute(uint8_t to, uint8_t next_hop)
     LoRaRouter->addRouteTo(to, next_hop);
     /// We expect this to fail delivery b/c the receiving node does not yet have a route to the dest
     sendLoRaMessage(msg, sizeof(msg), to, KL_FLAGS_NOECHO);
-    uint8_t new_route = LoRaRouter->doArp(HOPPED_TEST_SERVER_ID);
+    uint8_t new_route = LoRaRouter->doArp(NEXT_NODE_ID);
     LoRaRouter->setRetries(retries_orig);
     return new_route;
 }
@@ -100,13 +101,13 @@ namespace Test_KnightLab_LoRa {
         LoRaRouter->clearRoutingTable();
         initializeLoRaRoutes();
         TEST_ASSERT_EQUAL(
-            TEST_SERVER_ID,
-            LoRaRouter->getRouteTo(TEST_SERVER_ID));
+            NEXT_NODE_ID,
+            LoRaRouter->getRouteTo(NEXT_NODE_ID));
     }
 
     void test_router_setup(void) {
         setupLoRa(node_id, RF95_CS, RF95_INT, TX_POWER);
-        TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(TEST_SERVER_ID));
+        TEST_ASSERT_EQUAL(0, LoRaRouter->getRouteTo(NEXT_NODE_ID));
     }
 
     void test_long_echo(void) {
@@ -117,14 +118,14 @@ namespace Test_KnightLab_LoRa {
             RH_ROUTER_ERROR_NONE,
             //LoRaRouter->sendtoWait(long_msg, KL_LORA_MAX_MESSAGE_LEN, TEST_SERVER_ID));
             //LoRaRouter->sendtoWait(long_msg, RH_ROUTER_MAX_MESSAGE_LEN, TEST_SERVER_ID));
-            LoRaRouter->sendtoWait(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, TEST_SERVER_ID));
+            LoRaRouter->sendtoWait(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, NEXT_NODE_ID));
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
         //uint8_t len = sizeof(LoRaReceiveBuffer);
         uint8_t from;
         TEST_ASSERT_TRUE(
             LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
-        TEST_ASSERT_EQUAL(TEST_SERVER_ID, from);
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, from);
         //TEST_ASSERT_EQUAL(KL_LORA_MAX_MESSAGE_LEN, len);
         TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, len);
         TEST_ASSERT_EQUAL_STRING_LEN(long_msg, buf, len);
@@ -134,16 +135,16 @@ namespace Test_KnightLab_LoRa {
         uint8_t msg[] = "TEST SEND";
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            sendLoRaMessage(msg, sizeof(msg), TEST_SERVER_ID, KL_FLAGS_NOECHO));
-        TEST_ASSERT_TRUE(LoRaRouter->getRouteTo(TEST_SERVER_ID));
+            sendLoRaMessage(msg, sizeof(msg), NEXT_NODE_ID, KL_FLAGS_NOECHO));
+        TEST_ASSERT_TRUE(LoRaRouter->getRouteTo(NEXT_NODE_ID));
     }
 
     void test_long_hopped_send_receive(void) {
         _setup();
-        _forceRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID);
+        _forceRoute(ONE_HOP_NODE_ID, NEXT_NODE_ID);
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            sendLoRaMessage(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, HOPPED_TEST_SERVER_ID)
+            sendLoRaMessage(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, ONE_HOP_NODE_ID)
         );
         uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
         uint8_t len = sizeof(buf);
@@ -151,7 +152,7 @@ namespace Test_KnightLab_LoRa {
         uint8_t dest;
         TEST_ASSERT_TRUE(
             LoRaRouter->recvfromAckTimeout(buf, &len, 2000, &source, &dest));
-        TEST_ASSERT_EQUAL(HOPPED_TEST_SERVER_ID, source);
+        TEST_ASSERT_EQUAL(ONE_HOP_NODE_ID, source);
         TEST_ASSERT_EQUAL(node_id, dest);
         TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, len);
         TEST_ASSERT_EQUAL_STRING_LEN(long_msg, buf, len);
@@ -200,15 +201,15 @@ namespace Test_KnightLab_LoRa {
         uint8_t from;
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
-            LoRaRouter->sendtoWait(msg, sizeof(msg), TEST_SERVER_ID));
-        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->getRouteTo(TEST_SERVER_ID));
+            LoRaRouter->sendtoWait(msg, sizeof(msg), NEXT_NODE_ID));
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->getRouteTo(NEXT_NODE_ID));
         Serial.println("TEST SUCCESSFUL sendtoWait");
         Serial.println("TEST SENDING recvfromAckTimeout");
         TEST_ASSERT_TRUE(
             LoRaRouter->recvfromAckTimeout(buf, &len, 3000, &from));
         TEST_ASSERT(last_seq != LoRaRouter->getSequenceNumber());
         last_seq = LoRaRouter->getSequenceNumber();
-        TEST_ASSERT_EQUAL(TEST_SERVER_ID, from);
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, from);
         TEST_ASSERT_EQUAL(sizeof(msg), len);
         TEST_ASSERT_EQUAL_STRING_LEN(msg, buf, len);
     }
@@ -216,21 +217,23 @@ namespace Test_KnightLab_LoRa {
     void test_forceRoute(void) {
         _setup();
         TEST_ASSERT_EQUAL(
-            TEST_SERVER_ID,
-            _forceRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID)
+            NEXT_NODE_ID,
+            _forceRoute(ONE_HOP_NODE_ID, NEXT_NODE_ID)
         );
     }
 
     void test_doArp(void) {
         _setup();
-        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(TEST_SERVER_ID));
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(NEXT_NODE_ID));
         TEST_ASSERT_EQUAL(
-            TEST_SERVER_ID,
-            _forceRoute(HOPPED_TEST_SERVER_ID, TEST_SERVER_ID)
+            NEXT_NODE_ID,
+            _forceRoute(ONE_HOP_NODE_ID, NEXT_NODE_ID)
         );
         LoRaRouter->clearRoutingTable();
-        TEST_ASSERT_EQUAL(TEST_SERVER_ID, LoRaRouter->doArp(HOPPED_TEST_SERVER_ID));
-        TEST_ASSERT_EQUAL(4, LoRaRouter->doArp(4));
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(ONE_HOP_NODE_ID));
+        _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID);
+        LoRaRouter->clearRoutingTable();
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(TWO_HOPS_NODE_ID));
     }
 
     /* test runners */
