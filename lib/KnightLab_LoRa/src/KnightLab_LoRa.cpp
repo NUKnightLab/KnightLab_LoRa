@@ -63,8 +63,13 @@ void setupLoRa(uint8_t node_id, uint8_t rf95_cs, uint8_t rf95_int, uint8_t tx_po
      * spreading factor and/or bandwidth values. If we decide to explore these low-level tweaks,
      * this relationship should be investigated.
      */
+
+    /**
+     * Alternative modem configs have not tested well for us. Use only the default
+     * medium range config: Bw125Cr45Sf128.
+     */ 
     LoRaRadio->setModemConfig(RH_RF95::Bw125Cr45Sf128);
-    LoRaRadio->setCADTimeout(0); // 0 has no effect. Set to a valude to wait CAD
+    LoRaRadio->setCADTimeout(0); // 0 has no effect. Set to a value to wait CAD
 
     /** Router settings **/
 

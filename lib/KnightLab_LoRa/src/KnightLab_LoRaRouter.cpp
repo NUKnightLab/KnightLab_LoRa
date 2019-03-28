@@ -278,9 +278,9 @@ void KnightLab_LoRaRouter::broadcastClearRoutingTable()
     routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
 }
 
-void KnightLab_LoRaRouter::broadcastModemConfig()
+void KnightLab_LoRaRouter::broadcastModemConfig(RH_RF95::ModemConfigChoice config)
 {
-    uint8_t buf[] = { KL_TEST_CONTROL_SET_MODEM_CONFIG };
+    uint8_t buf[] = { KL_TEST_CONTROL_SET_MODEM_CONFIG, config };
     uint8_t len = sizeof(buf);
     routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
 }
@@ -458,8 +458,9 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
             Serial.println(cad_timeout);
             _driver.setCADTimeout(cad_timeout);
         } else if (buf[0] == KL_TEST_CONTROL_SET_MODEM_CONFIG) {
-            Serial.println("SETTING MODEM CONFIG SLOW+LONG RANGE");
-            (reinterpret_cast<RH_RF95*>(&_driver))->setModemConfig(RH_RF95::Bw125Cr48Sf4096);
+            Serial.print("SETTING MODEM CONFIG: ");
+            Serial.println(buf[1]);
+            (reinterpret_cast<RH_RF95*>(&_driver))->setModemConfig((RH_RF95::ModemConfigChoice)(buf[1]));
         }
         _seenIds[*from] = *id;
         return false;

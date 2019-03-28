@@ -84,15 +84,13 @@ public:
     int16_t getRouteSignalStrength(uint8_t dest);
     uint8_t getRouteTo(uint8_t dest);
     uint8_t doArp(uint8_t dest);
-    //uint8_t getLastFrom();
     uint8_t getSequenceNumber();
     void clearRoutingTable();
     void broadcastClearRoutingTable();
-    //void broadcastNoRetries();
     void broadcastRetries(uint8_t retries);
     void broadcastTimeout(uint16_t timeout);
     void broadcastCADTimeout(unsigned long timeout);
-    void broadcastModemConfig();
+    void broadcastModemConfig(RH_RF95::ModemConfigChoice config);
     void printRoutingTable();
     bool passesTopologyTest(uint8_t from);
     //void initializeAllRoutes();
