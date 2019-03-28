@@ -231,7 +231,9 @@ namespace Test_KnightLab_LoRa {
         );
         LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(ONE_HOP_NODE_ID));
-        _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID);
+        _forceRoute(TWO_HOPS_NODE_ID, ONE_HOP_NODE_ID);
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID,
+            _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID));
         LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(TWO_HOPS_NODE_ID));
     }

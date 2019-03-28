@@ -13,14 +13,10 @@ KnightLab_LoRaRouter::RoutedMessage KnightLab_LoRaRouter::_arpMessage;
 KnightLab_LoRaRouter::KnightLab_LoRaRouter(RHGenericDriver& driver, uint8_t thisAddress)
     : RHDatagram(driver, thisAddress)
 {
-    //_max_hops = RH_DEFAULT_MAX_HOPS;
     _retransmissions = 0;
     _lastSequenceNumber = 0;
     _timeout = RH_DEFAULT_TIMEOUT;
     _retries = RH_DEFAULT_RETRIES;
-    //_last_received_from_id = 0;
-    // 0 indicates no messages received from that node. Thus _lastSequenceNumber increment is
-    // modified not to use 0
     memset(_seenIds, 0, sizeof(_seenIds));
     _max_hops = RH_DEFAULT_MAX_HOPS;
     clearRoutingTable();
@@ -67,11 +63,6 @@ uint8_t KnightLab_LoRaRouter::getRouteTo(uint8_t dest)
         return 255;
     }
     return _static_routes[dest];
-    //uint8_t i;
-    //for (i = 0; i < RH_ROUTING_TABLE_SIZE; i++)
-    //if (_routes[i].dest == dest && _routes[i].state != Invalid)
-    //    return &_routes[i];
-    //return NULL;
 }
 
 uint8_t KnightLab_LoRaRouter::sendtoWait(uint8_t* buf, uint8_t len, uint8_t dest, uint8_t flags)
@@ -198,14 +189,13 @@ bool KnightLab_LoRaRouter::recvfromAckTimeout(uint8_t* buf, uint8_t* len, uint16
 {
     unsigned long starttime = millis();
     int32_t timeLeft;
-    while ((timeLeft = timeout - (millis() - starttime)) > 0)
-    {
-    if (waitAvailableTimeout(timeLeft))
-    {
-        if (recvfromAck(buf, len, from, to, id, flags))
-        return true;
-    }
-    YIELD;
+    while ((timeLeft = timeout - (millis() - starttime)) > 0) {
+        if (waitAvailableTimeout(timeLeft)) {
+            if (recvfromAck(buf, len, from, to, id, flags)) {
+                return true;
+            }
+        }
+        YIELD;
     }
     return false;
 }
@@ -224,11 +214,6 @@ void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from, uint8_t ack_cod
 {
     setHeaderId(id);
     setHeaderFlags(RH_FLAGS_ACK, 0xFF);
-    // We would prefer to send a zero length ACK,
-    // but if an RH_RF22 receives a 0 length message with a CRC error, it will never receive
-    // a 0 length message again, until its reset, which makes everything hang :-(
-    // So we send an ACK of 1 octet
-    // REVISIT: should we send the RSSI for the information of the sender?
     uint8_t ack = ack_code;
     Serial.print("acknowledge Sending ACK ID: ");
     Serial.print(id);
@@ -241,26 +226,6 @@ void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from, uint8_t ack_cod
     sendto(&ack, sizeof(ack), from);
     waitPacketSent();
 }
-
-/*
-void KnightLab_LoRaRouter::ackError(uint8_t id, uint8_t from, uint8_t error_code)
-{
-    setHeaderId(id);
-    setHeaderFlags(RH_FLAGS_ACK);
-    // We would prefer to send a zero length ACK,
-    // but if an RH_RF22 receives a 0 length message with a CRC error, it will never receive
-    // a 0 length message again, until its reset, which makes everything hang :-(
-    // So we send an ACK of 1 octet
-    // REVISIT: should we send the RSSI for the information of the sender?
-    uint8_t ack = error_code;
-    Serial.print("Sending ACK ERROR ID: ");
-    Serial.print(id);
-    Serial.print("; TO: ");
-    Serial.println(from);
-    sendto(&ack, sizeof(ack), from);
-    waitPacketSent();
-}
-*/
 
 void KnightLab_LoRaRouter::clearRoutingTable()
 {
@@ -285,15 +250,6 @@ void KnightLab_LoRaRouter::broadcastModemConfig(RH_RF95::ModemConfigChoice confi
     routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
 }
 
-/*
-void KnightLab_LoRaRouter::broadcastNoRetries()
-{
-    uint8_t buf[] = { KL_TEST_CONTROL_SET_RETRIES };
-    uint8_t len = sizeof(buf);
-    routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
-}
-*/
-
 void KnightLab_LoRaRouter::broadcastRetries(uint8_t retries)
 {
     uint8_t buf[] = { KL_TEST_CONTROL_SET_RETRIES, retries };
@@ -315,13 +271,6 @@ void KnightLab_LoRaRouter::broadcastCADTimeout(unsigned long timeout)
     uint8_t len = sizeof(buf);
     routeTestControl(buf, len, RH_BROADCAST_ADDRESS);
 }
-
-//void KnightLab_LoRaRouter::initializeAllRoutes()
-//{
-//    for (uint8_t i=0; i<sizeof(_static_routes); i++) {
-//        _static_routes[i] = i;
-//    }
-//}
 
 uint8_t KnightLab_LoRaRouter::getSequenceNumber() {
     return _lastE2ESequenceNumber;
@@ -502,7 +451,6 @@ bool KnightLab_LoRaRouter::routeTestControl(uint8_t* buf, uint8_t len, uint8_t a
     return routeHelper(buf, len, address, KL_FLAGS_TEST_CONTROL);
 }
 
-//bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, bool arp, bool test)
 bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t address, uint8_t flags)
 {
     Serial.print("routeHelper received flags: ");
@@ -514,21 +462,8 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         thisSequenceNumber = ++_lastSequenceNumber;
     }
     uint8_t retries = 0;
-    //while (retries++ <= _retries)
     do {
     setHeaderId(thisSequenceNumber);
-    /*
-    if (arp) {
-        Serial.println("Setting ARP header flag, clearing ACK");
-        setHeaderFlags(KL_FLAGS_ARP, RH_FLAGS_ACK|KL_FLAGS_TEST_CONTROL);
-    } else if (test) {
-        Serial.println("Sending test control flag");
-        setHeaderFlags(KL_FLAGS_TEST_CONTROL, RH_FLAGS_ACK|KL_FLAGS_ARP);
-    } else {
-        Serial.println("Clearing ACK and ARP header flags");
-        setHeaderFlags(RH_FLAGS_NONE, RH_FLAGS_ACK|KL_FLAGS_ARP|KL_FLAGS_TEST_CONTROL);
-    }
-    */
     bool arp = (bool)(flags & KL_FLAGS_ARP);
     Serial.print("Setting header flags to: ");
     Serial.println(flags, HEX);
@@ -568,7 +503,6 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         uint8_t _from, _to, _id, _flags;
         uint8_t ackbuf[KL_ROUTER_MAX_MESSAGE_LEN];
         uint8_t acklen = sizeof(ackbuf);
-        //if (recvfrom(0, 0, &from, &to, &id, &flags)) // Discards the message
         if (recvfrom(ackbuf, &acklen, &_from, &_to, &_id, &_flags)) // Discards the message
         {
             // Now have a message: is it our ACK?

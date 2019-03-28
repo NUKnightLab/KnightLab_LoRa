@@ -93,7 +93,6 @@ public:
     void broadcastModemConfig(RH_RF95::ModemConfigChoice config);
     void printRoutingTable();
     bool passesTopologyTest(uint8_t from);
-    //void initializeAllRoutes();
 
 protected:
     void acknowledge(uint8_t id, uint8_t from, uint8_t ack_code=KL_ACK_CODE_NONE);
