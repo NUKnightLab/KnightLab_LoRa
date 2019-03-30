@@ -231,10 +231,21 @@ namespace Test_KnightLab_LoRa {
         );
         LoRaRouter->clearRoutingTable();
         TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(ONE_HOP_NODE_ID));
-        _forceRoute(TWO_HOPS_NODE_ID, ONE_HOP_NODE_ID);
-        TEST_ASSERT_EQUAL(NEXT_NODE_ID,
-            _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID));
-        LoRaRouter->clearRoutingTable();
+        //_forceRoute(TWO_HOPS_NODE_ID, ONE_HOP_NODE_ID);
+        //TEST_ASSERT_EQUAL(NEXT_NODE_ID,
+        //    _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID));
+        //LoRaRouter->clearRoutingTable();
+        //TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(TWO_HOPS_NODE_ID));
+    }
+
+    void test_beaconized_route_discovery(void) {
+        _setup();
+        Serial.println("Waiting 5 seconds for beaconized route discovery ...");
+        delay(5000);
+        //delay(35000); // wait for beacons
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(ONE_HOP_NODE_ID));
+        // We still have to force this route b/c route discovery only occurs between adjacent nodes
+        _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID);
         TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(TWO_HOPS_NODE_ID));
     }
 
@@ -270,6 +281,7 @@ namespace Test_KnightLab_LoRa {
         #ifdef RH_TEST_NETWORK 
         #if RH_TEST_NETWORK == 1
         RUN_TEST(test_long_hopped_send_receive);
+        RUN_TEST(test_beaconized_route_discovery);
         #endif
         #endif
     }

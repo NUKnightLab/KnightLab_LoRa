@@ -116,7 +116,7 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
         if (_flags & KL_FLAGS_ARP) {
             if (_to == _thisAddress) {
                 acknowledge(_id, RH_BROADCAST_ADDRESS); // let everybody know I'm here, not just the requestor
-            } else if (_to == RH_BROADCAST_ADDRESS && getRouteTo(dest)> 0) {
+            } else if (_to == RH_BROADCAST_ADDRESS && ( dest == 0 || getRouteTo(dest)> 0) )  {
                 acknowledge(_id, _from);
             }
             return false; // done processing ARP
@@ -281,10 +281,18 @@ uint8_t KnightLab_LoRaRouter::getSequenceNumber() {
  * will be utilized. Nodes should not respond unless they have a valid route.
  */
 uint8_t KnightLab_LoRaRouter::doArp(uint8_t dest) {
+    if (dest == 0) {
+        routeArp(&dest, 1, 255);
+    } else if (!routeArp(&dest, 1, dest)) {
+        routeArp(&dest, 1, 255);
+    };
+    return getRouteTo(dest);
+   /*
     if (!routeArp(&dest, 1, dest)) {
         routeArp(&dest, 1, 255);
     };
     return getRouteTo(dest);
+    */
 }
 
 void KnightLab_LoRaRouter::printRoutingTable()
@@ -478,7 +486,10 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
     Serial.print(flags, HEX);
     Serial.print("; ARP: ");
     Serial.println(arp);
-    sendto(buf, len, address);
+    // experimental. Was just a blind send. SBB
+    if (!sendto(buf, len, address)) {
+        return false;
+    }
     waitPacketSent();
     Serial.println("DONE");
     // don't wait for ACKS to broadcasts unless it's an arp
@@ -542,7 +553,10 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         YIELD;
     }
     // Timeout exhausted, maybe retry
+    Serial.println("BEFORE YIELD");
     YIELD;
+    Serial.print("End of do while loop. Address is");
+    Serial.println(address);
     } while (++retries < _retries && address != RH_BROADCAST_ADDRESS);
     // Retries exhausted
     return false;
