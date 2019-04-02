@@ -6,8 +6,9 @@
 #define NEXT_NODE_ID 2
 #define ONE_HOP_NODE_ID 3
 #define TWO_HOPS_NODE_ID 4
+#define THREE_HOPS_NODE_ID 5
 #define KL_FLAGS_NOECHO 0x80
-#define RH_TEST_NETWORK 1
+#define RH_TEST_NETWORK 5
 #define RF95_CS 8
 #define RF95_INT 3
 #define TX_POWER 5
@@ -45,8 +46,12 @@ void _setup()
     //LoRaRouter->broadcastModemConfig(RH_RF95::Bw125Cr45Sf128);
     //LoRaRadio->setModemConfig(RH_RF95::Bw125Cr45Sf128);
 
-    LoRaRouter->setRetries(0); // default retries is 3
-    LoRaRouter->broadcastRetries(0);
+    // We'd like to see testing passing with 0 retries, and in general we are seeing this for
+    // tests that do not rely on beaconized route discovery (if we turn off beacons). For tests
+    // that depend on beacons, however, there is too much potential for network contention. If
+    // we are not passing tests on 3 retries, however, that could be a problem.
+    LoRaRouter->setRetries(3); // default retries is 3
+    LoRaRouter->broadcastRetries(3);
 
     LoRaRouter->setTimeout(50); // Default timeout is 200
     LoRaRouter->broadcastTimeout(50);
@@ -238,6 +243,25 @@ namespace Test_KnightLab_LoRa {
         //TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(TWO_HOPS_NODE_ID));
     }
 
+    void test_routingTableIsEmpty(void) {
+        LoRaRouter->clearRoutingTable();
+        TEST_ASSERT_TRUE(LoRaRouter->routingTableIsEmpty());
+        LoRaRouter->addRouteTo(0, 1);
+        TEST_ASSERT_FALSE(LoRaRouter->routingTableIsEmpty());
+        LoRaRouter->clearRoutingTable();
+        LoRaRouter->addRouteTo(1, 1);
+        TEST_ASSERT_FALSE(LoRaRouter->routingTableIsEmpty());
+        LoRaRouter->clearRoutingTable();
+        TEST_ASSERT_TRUE(LoRaRouter->routingTableIsEmpty());
+        LoRaRouter->addRouteTo(254, 1);
+        TEST_ASSERT_FALSE(LoRaRouter->routingTableIsEmpty());
+        LoRaRouter->clearRoutingTable();
+        TEST_ASSERT_TRUE(LoRaRouter->routingTableIsEmpty());
+        LoRaRouter->addRouteTo(255, 1);
+        // no clear. 255 is reserved and should not affect the table
+        TEST_ASSERT_TRUE(LoRaRouter->routingTableIsEmpty());
+    }
+
     void test_beaconized_route_discovery(void) {
         _setup();
         Serial.println("Waiting 5 seconds for beaconized route discovery ...");
@@ -247,6 +271,25 @@ namespace Test_KnightLab_LoRa {
         // We still have to force this route b/c route discovery only occurs between adjacent nodes
         _forceRoute(TWO_HOPS_NODE_ID, NEXT_NODE_ID);
         TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(TWO_HOPS_NODE_ID));
+        #if RH_TEST_NETWORK == 5
+        _forceRoute(THREE_HOPS_NODE_ID, NEXT_NODE_ID);
+        TEST_ASSERT_EQUAL(NEXT_NODE_ID, LoRaRouter->doArp(THREE_HOPS_NODE_ID));
+
+        TEST_ASSERT_EQUAL(
+            RH_ROUTER_ERROR_NONE,
+            //LoRaRouter->sendtoWait(long_msg, KL_LORA_MAX_MESSAGE_LEN, TEST_SERVER_ID));
+            //LoRaRouter->sendtoWait(long_msg, RH_ROUTER_MAX_MESSAGE_LEN, TEST_SERVER_ID));
+            LoRaRouter->sendtoWait(long_msg, KL_ROUTER_MAX_MESSAGE_LEN, TWO_HOPS_NODE_ID));
+        uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+        uint8_t len = sizeof(buf);
+        //uint8_t len = sizeof(LoRaReceiveBuffer);
+        uint8_t from;
+        TEST_ASSERT_TRUE(
+            LoRaRouter->recvfromAckTimeout(buf, &len, 5000, &from));
+        TEST_ASSERT_EQUAL(TWO_HOPS_NODE_ID, from);
+        TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, len);
+        TEST_ASSERT_EQUAL_STRING_LEN(long_msg, buf, len);
+        #endif
     }
 
     /* test runners */
@@ -273,6 +316,7 @@ namespace Test_KnightLab_LoRa {
          */
 
         RUN_TEST(KnightLab_LoRa__test_test);
+        RUN_TEST(test_routingTableIsEmpty);
         RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
         RUN_TEST(test_forceRoute);
         RUN_TEST(test_doArp);
@@ -280,6 +324,9 @@ namespace Test_KnightLab_LoRa {
         RUN_TEST(test_sendLoRaMessage);
         #ifdef RH_TEST_NETWORK 
         #if RH_TEST_NETWORK == 1
+        RUN_TEST(test_long_hopped_send_receive);
+        RUN_TEST(test_beaconized_route_discovery);
+        #elif RH_TEST_NETWORK == 5
         RUN_TEST(test_long_hopped_send_receive);
         RUN_TEST(test_beaconized_route_discovery);
         #endif

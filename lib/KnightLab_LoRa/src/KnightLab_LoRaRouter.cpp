@@ -103,6 +103,22 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
     // Get the message before its clobbered by the ACK (shared rx and tx buffer in some drivers
     if (available() && recvfrom(buf, len, &_from, &_to, &_id, &_flags)) {
 
+        // If this is not an ack or arp and is from a source we have not yet seen. Add it to the
+        // routing table
+        // TODO: check the RSSI
+        if ( !(_flags && RH_FLAGS_ACK) && !(_flags && KL_FLAGS_ARP) ) {
+            Serial.print("Checking if we have a route to: ");
+            Serial.println(_tmpMessage.header.source);
+            if (!getRouteTo(_tmpMessage.header.source)) {
+                Serial.print("Adding route to: ");
+                Serial.print(_tmpMessage.header.source);
+                Serial.print(" via: ");
+                Serial.println(_from);
+                addRouteTo(_tmpMessage.header.source, _from);
+                printRoutingTable();
+            }
+        }
+
         // ACK
         if (_flags & RH_FLAGS_ACK) {
             Serial.print("Received ACK with data: ");
@@ -151,6 +167,7 @@ bool KnightLab_LoRaRouter::recvfromAck(uint8_t* buf, uint8_t* len, uint8_t* sour
     if (recvfromAckHelper((uint8_t*)&_tmpMessage, &tmpMessageLen, &_from, &_to, &_id, &_flags))
     {
     peekAtMessage(&_tmpMessage, tmpMessageLen);
+
     // See if its for us or has to be routed
     if ( _tmpMessage.header.dest == _thisAddress
         || (_tmpMessage.header.dest == RH_BROADCAST_ADDRESS ))
@@ -312,6 +329,9 @@ void KnightLab_LoRaRouter::printRoutingTable()
 
 void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rssi)
 {
+    if (dest == 255) {
+        return;
+    }
     Serial.print("Adding route TO: ");
     Serial.print(dest);
     Serial.print(" VIA: ");
@@ -335,6 +355,24 @@ void KnightLab_LoRaRouter::setRouteSignalStrength(uint8_t dest, int16_t rssi) {
 
 int16_t KnightLab_LoRaRouter::getRouteSignalStrength(uint8_t dest) {
     return -((int16_t)_route_signal_strength[dest]);
+}
+
+bool KnightLab_LoRaRouter::routingTableIsEmpty()
+{
+    static uint8_t testblock [255] = {0};
+    if (!memcmp(testblock, _static_routes, 255)) {
+        return true;
+    } else {
+        return false;
+    }
+    /*
+    for (int i=0; i<255; i++) {
+        if (LoRaRouter->getRouteTo(i) > 0) {
+            return false;
+        }
+    }
+    return true;
+    */
 }
 
 bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
@@ -381,6 +419,16 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
         || (_thisAddress == 4 && from == 2) ) {
             return false;
         }
+    #elif RH_TEST_NETWORK==5
+        // This network looks like 1-2-3-4-5
+        if ( !(
+           (_thisAddress == 1 && from == 2)
+        || (_thisAddress == 2 && (from == 1 || from == 3))
+        || (_thisAddress == 3 && (from == 2 || from == 4))
+        || (_thisAddress == 4 && (from == 3 || from == 5))
+        || (_thisAddress == 5 && from == 4))) {
+            return false;
+        }
     #endif
     return true;
 }
@@ -423,8 +471,8 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
         return false;
     }
     if (!passesTopologyTest(*from)) {
-        Serial.print("REJECTING out-of-range message for testing from NODE: ");
-        Serial.println(*from);
+        //Serial.print("REJECTING out-of-range message for testing from NODE: ");
+        //Serial.println(*from);
         return false;
     }
     Serial.print("Received message ID: "); Serial.print(*id);

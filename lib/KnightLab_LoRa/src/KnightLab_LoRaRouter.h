@@ -6,7 +6,7 @@
 
 #include <RHDatagram.h>
 
-#define RH_TEST_NETWORK 1
+#define RH_TEST_NETWORK 5
 
 // The acknowledgement bit in the FLAGS
 // The top 4 bits of the flags are reserved for RadioHead. The lower 4 bits are reserved
@@ -82,6 +82,7 @@ public:
     void addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rssi=-32768);
     void setRouteSignalStrength(uint8_t dest, int16_t rssi);
     int16_t getRouteSignalStrength(uint8_t dest);
+    bool routingTableIsEmpty();
     uint8_t getRouteTo(uint8_t dest);
     uint8_t doArp(uint8_t dest);
     uint8_t getSequenceNumber();

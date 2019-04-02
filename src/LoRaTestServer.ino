@@ -9,13 +9,13 @@
  * For network testing, deploy 2 servers with IDs 1 and 2 and define RH_TEST_NETWORK as 1.
  * Test with a client of ID 3 which should have direct access to 2 and hopped access to 1.
  */
-#define TEST_SERVER_ID 2
-// #define RH_TEST_NETWORK 1
+#define TEST_SERVER_ID 5
 #define RF95_CS 8
 #define RF95_INT 3
 #define TX_POWER 7
 
 #define KL_FLAGS_NOECHO 0x80
+
 
 void setup() {
     Serial.begin(9600);
@@ -43,12 +43,8 @@ void setup() {
 void loop() {
     static uint8_t buf[255];
     static int counter = 0;
-    // This delay makes a big difference for reliability of immediate beacon. Does it need to
-    // be randomized? Maybe not. If so, it should probably have a minimum value.
-
-    TODO: try this with just a static minimum value. Use a random range if that doesn't work
-
-    static unsigned long beacon_time = millis() + random(1000);
+    static unsigned long beacon_time = 0;
+    static bool have_routes = false;
     if (++counter % 10000 == 0)
         Serial.print(".");
     if (counter % 1000000 == 0)
@@ -90,17 +86,22 @@ void loop() {
         memset(buf, 0, sizeof(buf));
     }
 
+    // if we had routes but no longer do, reset beacon time for immediate recovery
+    // Minimum 1 sec allows us to slip in packets for testing purposes of non-beacon dependent tests.
+    // Random rang of 1-2 seconds helps alleviate network contention of multiple beacons all
+    // firing off at the same time.
+    if (LoRaRouter->routingTableIsEmpty()) {
+        if (have_routes) {
+            beacon_time = millis() + random(1000, 2000);
+            have_routes = false;
+        }
+    } else {
+        have_routes = true;
+    }
+
     if (millis() > beacon_time) {
         Serial.println("BEACON DUE");
-        bool have_route = false;
-        for (int i=0; i<255; i++) {
-            if (LoRaRouter->getRouteTo(i) > 0) {
-                have_route = true;
-                beacon_time = millis() + 30000;
-                break;
-            }
-        }
-        if (!have_route) {
+        if (!have_routes) {
             Serial.println("HAVE NO ROUTES. SENDING BEACON");
             LoRaRadio->waitPacketSent();
             LoRaRadio->setModeIdle();
@@ -111,8 +112,8 @@ void loop() {
             uint8_t resp = LoRaRouter->doArp(0);
             Serial.print("RECEVIED: ");
             Serial.println(resp);
-            beacon_time = millis() + 30000;
         }
+        beacon_time = millis() + 30000;
     }
 
     digitalWrite(LED_BUILTIN, LOW);
