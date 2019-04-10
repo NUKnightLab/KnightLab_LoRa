@@ -76,6 +76,24 @@ void loop() {
         //LoRaRouter->addRouteTo(source, LoRaRouter->headerFrom());
         if ( (flags & KL_FLAGS_NOECHO) == KL_FLAGS_NOECHO) {
             Serial.println("FLAG: NOECHO. Not sending reply");
+        } else if ( (flags & KL_FLAGS_SEND_ROUTES) == KL_FLAGS_SEND_ROUTES ) {
+            uint8_t sendbuf[255] = { 0 };
+            uint8_t index = 0;
+            for (uint8_t i=1; i<255; i++) {
+                if (LoRaRouter->getRouteTo(i)) {
+                    sendbuf[index++] = i;
+                    sendbuf[index++] = LoRaRouter->getRouteTo(i);
+                } 
+                // TODO: better handling of buffer limit
+                if (index >= 255) {
+                    break;
+                }
+            }
+            if (LoRaRouter->sendtoWait(sendbuf, index, source) != RH_ROUTER_ERROR_NONE) {
+                Serial.println("sendtoWait FAILED");
+            } else {
+                Serial.println("SENT ROUTES");
+            }
         } else {
             if (LoRaRouter->sendtoWait(buf, len, source) != RH_ROUTER_ERROR_NONE) {
                 Serial.println("sendtoWait FAILED");

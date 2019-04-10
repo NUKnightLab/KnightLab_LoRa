@@ -270,6 +270,7 @@ namespace Test_KnightLab_LoRa {
         _forceRoute(FOUR_HOPS_NODE_ID, ONE_HOP_NODE_ID);
         TEST_ASSERT_EQUAL(ONE_HOP_NODE_ID, LoRaRouter->doArp(FOUR_HOPS_NODE_ID));
 
+        /*
         TEST_ASSERT_EQUAL(
             RH_ROUTER_ERROR_NONE,
             //LoRaRouter->sendtoWait(long_msg, KL_LORA_MAX_MESSAGE_LEN, TEST_SERVER_ID));
@@ -284,7 +285,58 @@ namespace Test_KnightLab_LoRa {
         TEST_ASSERT_EQUAL(THREE_HOPS_NODE_ID, from);
         TEST_ASSERT_EQUAL(KL_ROUTER_MAX_MESSAGE_LEN, len);
         TEST_ASSERT_EQUAL_STRING_LEN(long_msg, buf, len);
+        */
+
         #endif
+    }
+
+
+    /**
+     * TODO: In reality, these routes are probably all discovered during beaconized route discovery
+     * as evidenced by test_get_routes. So we are not really testing much here. Can we design a
+     * better test?
+     */ 
+    void test_discoverAllRoutes(void) {
+        _setup();
+        Serial.println("Waiting 5 seconds for beaconized route discovery ...");
+        delay(5000);
+        LoRaRouter->discoverAllRoutes();
+        TEST_ASSERT_EQUAL(
+            ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(ONE_HOP_NODE_ID)
+        );
+        TEST_ASSERT_EQUAL(
+            ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(TWO_HOPS_NODE_ID)
+        );
+        TEST_ASSERT_EQUAL(
+            ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(THREE_HOPS_NODE_ID)
+        );
+        TEST_ASSERT_EQUAL(
+            ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(FOUR_HOPS_NODE_ID)
+        );
+    }
+
+    void test_get_routes(void) {
+        _setup();
+        Serial.println("Waiting 5 seconds for beaconized route discovery ...");
+        delay(5000);
+        Serial.println("Sending beacon to attach to network");
+        uint8_t resp = LoRaRouter->doArp(0);
+        TEST_ASSERT_EQUAL(
+            ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(ONE_HOP_NODE_ID)
+        );
+        LoRaRouter->requestRoutes(ONE_HOP_NODE_ID);
+        TEST_ASSERT_EQUAL(ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(ONE_HOP_NODE_ID)
+        );
+        TEST_ASSERT_EQUAL(
+            ONE_HOP_NODE_ID,
+            LoRaRouter->getRouteTo(TWO_HOPS_NODE_ID)
+        );
     }
 
     /* test runners */
@@ -312,11 +364,14 @@ namespace Test_KnightLab_LoRa {
 
         RUN_TEST(KnightLab_LoRa__test_test);
         RUN_TEST(test_routingTableIsEmpty);
+        RUN_TEST(test_doArp);
+        RUN_TEST(test_get_routes);
+        RUN_TEST(test_discoverAllRoutes);
         RUN_TEST(test_echo); RUN_TEST(test_echo); /* Do not remove. See NOTE above */
         RUN_TEST(test_forceRoute);
-        RUN_TEST(test_doArp);
         RUN_TEST(test_long_echo);
         RUN_TEST(test_sendLoRaMessage);
+
         #ifdef RH_TEST_NETWORK 
         #if RH_TEST_NETWORK == 1
         RUN_TEST(test_long_hopped_send_receive);

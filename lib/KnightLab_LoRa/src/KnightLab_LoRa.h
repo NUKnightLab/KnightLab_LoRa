@@ -25,5 +25,6 @@ void setupLoRa(uint8_t node_id, uint8_t rf95_cs, uint8_t rf95_int, uint8_t tx_po
 uint8_t sendLoRaMessage(uint8_t *msg, uint8_t len, uint8_t to_id, uint8_t flags=0x00);
 bool receiveLoRaMessage(uint16_t timeout=0, bool sleep=false);
 void initializeLoRaRoutes();
+void fetchRoutesFrom(uint8_t node_id);
 
 #endif

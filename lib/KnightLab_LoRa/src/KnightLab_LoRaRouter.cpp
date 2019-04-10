@@ -133,7 +133,7 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             if (_to == _thisAddress) {
                 acknowledge(_id, RH_BROADCAST_ADDRESS); // let everybody know I'm here, not just the requestor
             } else if (_to == RH_BROADCAST_ADDRESS && ( dest == 0 || getRouteTo(dest)> 0) )  {
-                acknowledge(_id, _from);
+                acknowledgeArp(_id, _from);
             }
             return false; // done processing ARP
         } else if (_to ==_thisAddress) {
@@ -241,6 +241,27 @@ void KnightLab_LoRaRouter::acknowledge(uint8_t id, uint8_t from, uint8_t ack_cod
     Serial.print("; FLAGS: ");
     Serial.println(RH_FLAGS_ACK, HEX);
     sendto(&ack, sizeof(ack), from);
+    waitPacketSent();
+}
+
+void KnightLab_LoRaRouter::acknowledgeArp(uint8_t id, uint8_t from)
+{
+    setHeaderId(id);
+    setHeaderFlags(RH_FLAGS_ACK, 0xFF);
+    uint8_t buf[255] = { 0 };
+    buf[0] = KL_ACK_CODE_NONE;
+    uint8_t index = 1;
+    for (uint8_t i=1; i<255; i++) {
+        if (_static_routes[i]) {
+            buf[index++] = i;
+            buf[index++] = _static_routes[i];
+        } 
+        // TODO: better handling of buffer limit
+        if (index >= 255) {
+            break;
+        }
+    }
+    sendto(buf, index, from);
     waitPacketSent();
 }
 
@@ -439,7 +460,6 @@ bool KnightLab_LoRaRouter::passesTopologyTest(uint8_t from)
  */
 bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, uint8_t* to, uint8_t* id, uint8_t* flags)
 {
-    Serial.println("KnightLab_LoRaRouter::recvfrom");
     bool ret = RHDatagram::recvfrom(buf, len, from, to, id, flags);
     // check for test controls before conforming to test network topology
     if (*to == RH_BROADCAST_ADDRESS && (*flags & KL_FLAGS_TEST_CONTROL)) {
@@ -484,6 +504,7 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
     // Check every signal that comes in against the routing table to always be adding new
     // single-hop routes as we see them. We prefer single-hop over multi-hop if the RSSI > -80
     // or otherwise is stronger than the multi-hop route.
+    // For ACKs that contain routes, also add those routes
     if (ret) {
         uint8_t existing_route = getRouteTo(*from);
         int16_t last_rssi = _driver.lastRssi();
@@ -493,6 +514,26 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
                         || last_rssi > getRouteSignalStrength(*from)) )) {
                 addRouteTo(*from, *from, last_rssi);
         }
+        // TODO: use a specific ack code rather than depending on the length?
+        if ( (*flags & RH_FLAGS_ACK) && (*len > 1) ) {
+            Serial.print("RECEIVED ACK WITH ROUTES. ADDING RECEIVED ROUTES FROM: ");
+            Serial.println(*from);
+            //uint8_t msg_len = (uint8_t)*len;
+            for (uint8_t i = 1; i<*len; i++) {
+                uint8_t _dest = buf[i++];
+                if (_dest == _thisAddress) {
+                    continue;
+                }
+                existing_route = getRouteTo(_dest);
+                if (!existing_route
+                    || (existing_route != _dest && (
+                        last_rssi > -80
+                        || last_rssi > getRouteSignalStrength(_dest)) )) {
+                    addRouteTo(_dest, *from, last_rssi);
+                }
+            }
+        }
+        printRoutingTable();
     }
     return ret;
 }
@@ -579,16 +620,31 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
                 }
                 // Its the ACK we are waiting for
                 // if it's an ack to an arp, we should record the route
+                // and any additional routes sent
+                /** is this being used?? SBB */
+                /*
                 if (arp) {
                     Serial.println("Received ACK for ARP");
                     addRouteTo(buf[0], _from, _driver.lastRssi());
+                    //Serial.println("RECEIVED ACK TO ARP. ADDING RECEIVED ROUTES");
+                    //for (uint8_t i = 1; i<acklen; i++) {
+                    //    Serial.print(ackbuf[i++]);
+                    //    Serial.print("--->");
+                    //    Serial.println(ackbuf[i]);
+                    //}
                 }
+                */
                 return true;
             } else if ( arp && _to == RH_BROADCAST_ADDRESS) {
                 // this is an "I am here" broadcast response to our arp request
                 // route was added when signal received
                 //addRouteTo(from, from, _driver.lastRssi());
                 return true;
+            //} else if ( arp & _to == _thisAddress) {
+            //    Serial.print("*****  RECEIVED DIRECT ARP REQUEST FROM ");
+            //    Serial.print(_from);
+            //    Serial.println(" ******");
+            //    return true;
             } else if (   !(_flags & RH_FLAGS_ACK)
                 && (_id == _seenIds[_from])) {
                 // This is a request we have already received. ACK it again
@@ -635,4 +691,60 @@ uint8_t KnightLab_LoRaRouter::route(RoutedMessage* message, uint8_t messageLen)
         return RH_ROUTER_ERROR_UNABLE_TO_DELIVER;
     }
     return RH_ROUTER_ERROR_NONE;
+}
+
+void KnightLab_LoRaRouter::requestRoutes(uint8_t address) {
+    uint8_t sendbuf[] = "RR";
+    sendtoWait(sendbuf, sizeof(sendbuf), address, KL_FLAGS_SEND_ROUTES);
+    uint8_t buf[255] = { 0 };
+    uint8_t len = 255;
+    uint8_t source;
+    uint8_t dest;
+    if (recvfromAckTimeout(buf, &len, 2000, &source, &dest)) {
+        Serial.print("RECEIVED ROUTES FROM: ");
+        Serial.println(source);
+        uint8_t source_route = getRouteTo(source);
+        int16_t last_rssi = _driver.lastRssi();
+        uint8_t existing_route = 0;
+        for (uint8_t i = 1; i<len; i++) {
+            uint8_t _dest = buf[i++];
+            if (_dest == _thisAddress) {
+                continue;
+            }
+            existing_route = getRouteTo(_dest);
+            if (!existing_route
+                || (existing_route != _dest && (
+                    last_rssi > -80
+                    || last_rssi > getRouteSignalStrength(_dest)) )) {
+                    addRouteTo(_dest, source_route, last_rssi);
+            }
+        }
+        printRoutingTable();
+    }
+}
+
+void KnightLab_LoRaRouter::discoverAllRoutes()
+{
+    uint8_t visited[255] = {0};
+    bool clean_pass = false;
+    // send our own beacon to attach to the network
+    uint8_t resp = doArp(0);
+    Serial.println("Beginning fetch of routes from known nodes");
+    printRoutingTable();
+    do {
+        clean_pass = true;
+        for (uint8_t i=1; i<255; i++) {
+            if (i == _thisAddress) {
+                continue;
+            }
+            if (!visited[i] && getRouteTo(i)) {
+                Serial.print("FETCHING ROUTES FROM: ");
+                Serial.println(i);
+                requestRoutes(i);
+                visited[i] = 1;
+                clean_pass = false;
+            }
+        }
+    } while (!clean_pass);
+
 }

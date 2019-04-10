@@ -14,6 +14,8 @@
 #define RH_FLAGS_ACK 0x80
 #define KL_FLAGS_ARP 0x08
 #define KL_FLAGS_TEST_CONTROL 0x40
+#define KL_FLAGS_SEND_ROUTES 0x04
+#define KL_FLAGS_HAVE_ROUTES 0x02
 #define RH_DEFAULT_TIMEOUT 200
 #define RH_DEFAULT_RETRIES 3
 
@@ -35,6 +37,7 @@
 
 #define KL_ACK_CODE_NONE 0
 #define KL_ACK_CODE_ERROR_NO_ROUTE 2
+#define KL_ACK_CODE_HAVE_ROUTES 3
 
 #define RH_ROUTER_MAX_MESSAGE_LEN (RH_MAX_MESSAGE_LEN - sizeof(KnightLab_LoRaRouter::RoutedMessageHeader))
 // 255 - sizeof(RoutedMessageHeader)
@@ -94,9 +97,12 @@ public:
     void broadcastModemConfig(RH_RF95::ModemConfigChoice config);
     void printRoutingTable();
     bool passesTopologyTest(uint8_t from);
+    void requestRoutes(uint8_t address);
+    void discoverAllRoutes();
 
 protected:
     void acknowledge(uint8_t id, uint8_t from, uint8_t ack_code=KL_ACK_CODE_NONE);
+    void acknowledgeArp(uint8_t id, uint8_t from);
     bool haveNewMessage();
     uint8_t _lastE2ESequenceNumber;
 
