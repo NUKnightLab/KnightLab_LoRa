@@ -5,6 +5,7 @@
 #define KnightLab_LoRaRouter_h
 
 #include <RHDatagram.h>
+#include <RH_RF95.h>
 
 #define RH_TEST_NETWORK 5
 
@@ -16,6 +17,7 @@
 #define KL_FLAGS_TEST_CONTROL 0x40
 #define KL_FLAGS_SEND_ROUTES 0x04
 #define KL_FLAGS_HAVE_ROUTES 0x02
+#define KL_FLAGS_MORE_DATA 0x01
 #define RH_DEFAULT_TIMEOUT 200
 #define RH_DEFAULT_RETRIES 3
 
