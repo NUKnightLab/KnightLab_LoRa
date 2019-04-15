@@ -120,6 +120,7 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
         }
 
         // SEND_ROUTES
+        /*
         if ( (_flags & KL_FLAGS_SEND_ROUTES) == KL_FLAGS_SEND_ROUTES) {
             Serial.println("Received SEND ROUTES request.");
             uint8_t sendbuf[255] = { 0 };
@@ -141,6 +142,7 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             }
             return false;
         }
+        */
 
         // ACK
         if (_flags & RH_FLAGS_ACK) {
@@ -713,6 +715,7 @@ uint8_t KnightLab_LoRaRouter::route(RoutedMessage* message, uint8_t messageLen)
     return RH_ROUTER_ERROR_NONE;
 }
 
+/*
 void KnightLab_LoRaRouter::requestRoutes(uint8_t address) {
     uint8_t sendbuf[] = "RR";
     sendtoWait(sendbuf, sizeof(sendbuf), address, KL_FLAGS_SEND_ROUTES);
@@ -742,7 +745,9 @@ void KnightLab_LoRaRouter::requestRoutes(uint8_t address) {
         printRoutingTable();
     }
 }
+*/
 
+/*
 void KnightLab_LoRaRouter::discoverAllRoutes()
 {
     uint8_t visited[255] = {0};
@@ -766,5 +771,5 @@ void KnightLab_LoRaRouter::discoverAllRoutes()
             }
         }
     } while (!clean_pass);
-
 }
+*/
