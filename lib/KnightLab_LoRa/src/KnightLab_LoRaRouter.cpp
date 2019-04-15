@@ -119,6 +119,29 @@ bool KnightLab_LoRaRouter::recvfromAckHelper(uint8_t* buf, uint8_t* len, uint8_t
             }
         }
 
+        // SEND_ROUTES
+        if ( (_flags & KL_FLAGS_SEND_ROUTES) == KL_FLAGS_SEND_ROUTES) {
+            Serial.println("Received SEND ROUTES request.");
+            uint8_t sendbuf[255] = { 0 };
+            uint8_t index = 0;
+            for (uint8_t i=1; i<255; i++) {
+                if (getRouteTo(i)) {
+                    sendbuf[index++] = i;
+                    sendbuf[index++] = getRouteTo(i);
+                }
+                // TODO: better handling of buffer limit
+                if (index >= 255) {
+                    break;
+                }
+            }
+            if (sendtoWait(sendbuf, index, _tmpMessage.header.source, RH_FLAGS_ACK & KL_FLAGS_SEND_ROUTES) != RH_ROUTER_ERROR_NONE) {
+                Serial.println("sendtoWait FAILED");
+            } else {
+                Serial.println("SENT ROUTES");
+            }
+            return false;
+        }
+
         // ACK
         if (_flags & RH_FLAGS_ACK) {
             Serial.print("Received ACK with data: ");
@@ -359,7 +382,6 @@ void KnightLab_LoRaRouter::addRouteTo(uint8_t dest, uint8_t next_hop, int16_t rs
     Serial.println(next_hop);
     _static_routes[dest] = next_hop;
     setRouteSignalStrength(dest, rssi);
-    printRoutingTable();
 }
 
 void KnightLab_LoRaRouter::setRouteSignalStrength(uint8_t dest, int16_t rssi) {
@@ -515,6 +537,7 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
                 addRouteTo(*from, *from, last_rssi);
         }
         // TODO: use a specific ack code rather than depending on the length?
+        /*
         if ( (*flags & RH_FLAGS_ACK) && (*len > 1) ) {
             Serial.print("RECEIVED ACK WITH ROUTES. ADDING RECEIVED ROUTES FROM: ");
             Serial.println(*from);
@@ -534,6 +557,7 @@ bool KnightLab_LoRaRouter::recvfrom(uint8_t* buf, uint8_t* len, uint8_t* from, u
             }
         }
         printRoutingTable();
+        */
     }
     return ret;
 }
@@ -580,7 +604,6 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         return false;
     }
     waitPacketSent();
-    Serial.println("DONE");
     // don't wait for ACKS to broadcasts unless it's an arp
     if (!arp && address == RH_BROADCAST_ADDRESS)
         return true;
@@ -657,10 +680,7 @@ bool KnightLab_LoRaRouter::routeHelper(uint8_t* buf, uint8_t len, uint8_t addres
         YIELD;
     }
     // Timeout exhausted, maybe retry
-    Serial.println("BEFORE YIELD");
     YIELD;
-    Serial.print("End of do while loop. Address is");
-    Serial.println(address);
     } while (++retries < _retries && address != RH_BROADCAST_ADDRESS);
     // Retries exhausted
     return false;
